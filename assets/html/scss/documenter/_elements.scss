@@ -15,6 +15,7 @@ h1, h2, h3, h4, h5, h6 {
 
     &::before {
       @include font-awesome;
+      // fa-link
       content: "\f0c1";
     }
   }
@@ -38,10 +39,18 @@ pre {
   position: relative;
   overflow: hidden;
 
-  code {
-    padding: 0.7rem 0.5rem;
+  code, code.hljs {
+    padding: 0 $documenter-container-left-padding !important;
     overflow: auto;
     display: block;
+  }
+
+  code:first-of-type, code.hljs:first-of-type {
+    padding-top: 0.5rem !important;
+  }
+
+  code:last-of-type, code.hljs:last-of-type {
+    padding-bottom: 0.5rem !important;
   }
 
   .copy-button {
@@ -55,7 +64,7 @@ pre {
     height: 2.5em;
     background: transparent;
     border: none;
-    font-family: "Font Awesome 5 Free";
+    font-family: "Font Awesome 6 Free";
     color: $body-color;
     cursor: pointer;
     text-align: center;

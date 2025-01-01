@@ -1,9 +1,10 @@
 module HTMLWriterTests
 
 using Test
+import MarkdownAST
 using Documenter
 using Documenter: DocSystem
-using Documenter.Writers.HTMLWriter: HTMLWriter, generate_version_file, generate_redirect_file, expand_versions
+using Documenter.HTMLWriter: HTMLWriter, generate_version_file, generate_redirect_file, expand_versions, _strip_latex_math_delimiters
 
 function verify_version_file(versionfile, entries)
     @test isfile(versionfile)
@@ -14,13 +15,14 @@ function verify_version_file(versionfile, entries)
         @test i !== nothing
         idx = last(i)
     end
+    return
 end
 
 function verify_redirect_file(redirectfile, version)
     @test isfile(redirectfile)
     content = read(redirectfile, String)
 
-    @test occursin("url=./$(version)/", content)
+    return @test occursin("url=./$(version)/", content)
 end
 
 @testset "HTMLWriter" begin
@@ -29,7 +31,9 @@ end
     @test isdir(HTMLWriter.ASSETS_THEMES)
 
     for theme in HTMLWriter.THEMES
-        @test isfile(joinpath(HTMLWriter.ASSETS_SASS, "$(theme).scss"))
+        # catppuccin-* themes are templated based on a common catppuccin.scss source file
+        scss = replace(theme, r"(?<=^catppuccin)-[a-z]+$" => "")
+        @test isfile(joinpath(HTMLWriter.ASSETS_SASS, "$(scss).scss"))
         @test isfile(joinpath(HTMLWriter.ASSETS_THEMES, "$(theme).css"))
     end
 
@@ -55,12 +59,12 @@ end
         link = assetlink("my/sub/page", asset)
         @test link.src == "https://example.com/foo.js"
     end
-    let asset = asset("http://example.com/foo.js", class=:ico)
+    let asset = asset("http://example.com/foo.js", class = :ico)
         @test asset.uri == "http://example.com/foo.js"
         @test asset.class == :ico
         @test asset.islocal === false
     end
-    let asset = asset("foo/bar.css", islocal=true)
+    let asset = asset("foo/bar.css", islocal = true)
         @test asset.uri == "foo/bar.css"
         @test asset.class == :css
         @test asset.islocal === true
@@ -77,7 +81,7 @@ end
     @test_throws Exception asset("foo.js")
     @test_throws Exception asset("foo.js", islocal = false)
     @test_throws Exception asset("https://example.com/foo.js?q=1")
-    @test_throws Exception asset("https://example.com/foo.js", class=:error)
+    @test_throws Exception asset("https://example.com/foo.js", class = :error)
     # Edge cases that do not actually quite work correctly:
     let asset = asset("https://example.com/foo.js", islocal = true)
         @test asset.uri == "https://example.com/foo.js"
@@ -95,7 +99,7 @@ end
     end
     @test_logs (:error, "Local asset should not have an absolute URI: /foo/bar.ico") asset("/foo/bar.ico", islocal = true)
 
-    let asset = asset("https://plausible.io/js/plausible.js"; class=:js, attributes=Dict(Symbol("data-domain")=>"example.com", :defer=>""))
+    let asset = asset("https://plausible.io/js/plausible.js"; class = :js, attributes = Dict(Symbol("data-domain") => "example.com", :defer => ""))
         @test asset.uri == "https://plausible.io/js/plausible.js"
         @test asset.class == :js
         @test asset.islocal === false
@@ -108,12 +112,13 @@ end
 
     # HTML format object
     @test Documenter.HTML() isa Documenter.HTML
-    @test_throws ArgumentError Documenter.HTML(collapselevel=-200)
-    @test_throws Exception Documenter.HTML(assets=["foo.js", 10])
-    @test_throws ArgumentError Documenter.HTML(footer="foo\n\nbar")
-    @test_throws ArgumentError Documenter.HTML(footer="# foo")
-    @test_throws ArgumentError Documenter.HTML(footer="")
-    @test Documenter.HTML(footer="foo bar [baz](https://github.com)") isa Documenter.HTML
+    @test_throws ArgumentError Documenter.HTML(collapselevel = -200)
+    @test_throws Exception Documenter.HTML(assets = ["foo.js", 10])
+    @test_throws ArgumentError Documenter.HTML(footer = "foo\n\nbar")
+    @test_throws ArgumentError Documenter.HTML(footer = "# foo")
+    @test_throws ArgumentError Documenter.HTML(footer = "")
+    @test Documenter.HTML(footer = "foo bar [baz](https://github.com)") isa Documenter.HTML
+    @test_throws ErrorException Documenter.HTML(edit_branch = nothing, edit_link = nothing)
 
     # MathEngine
     let katex = KaTeX()
@@ -164,10 +169,12 @@ end
         versionfile = joinpath(tmpdir, "versions.js")
         redirectfile = joinpath(tmpdir, "index.html")
         devurl = "dev"
-        versions = ["stable", "dev",
-                    "2.1.1", "v2.1.0", "v2.0.1", "v2.0.0",
-                    "1.1.1", "v1.1.0", "v1.0.1", "v1.0.0",
-                    "0.1.1", "v0.1.0"] # note no `v` on first ones
+        versions = [
+            "stable", "dev",
+            "2.1.1", "v2.1.0", "v2.0.1", "v2.0.0",
+            "1.1.1", "v1.1.0", "v1.0.1", "v1.0.0",
+            "0.1.1", "v0.1.0",
+        ] # note no `v` on first ones
 
         # make dummy directories of versioned docs
         cd(tmpdir) do
@@ -180,10 +187,12 @@ end
         versions = ["stable" => "v^", "v#.#", "dev" => "dev"] # default to makedocs
         entries, symlinks = expand_versions(tmpdir, versions)
         @test entries == ["stable", "v2.1", "v2.0", "v1.1", "v1.0", "v0.1", "dev"]
-        @test symlinks == ["stable"=>"2.1.1", "v2.1"=>"2.1.1", "v2.0"=>"v2.0.1",
-                           "v1.1"=>"1.1.1", "v1.0"=>"v1.0.1", "v0.1"=>"0.1.1",
-                           "v2"=>"2.1.1", "v1"=>"1.1.1", "v2.1.1"=>"2.1.1",
-                           "v1.1.1"=>"1.1.1", "v0.1.1"=>"0.1.1"]
+        @test symlinks == [
+            "stable" => "2.1.1", "v2.1" => "2.1.1", "v2.0" => "v2.0.1",
+            "v1.1" => "1.1.1", "v1.0" => "v1.0.1", "v0.1" => "0.1.1",
+            "v2" => "2.1.1", "v1" => "1.1.1", "v2.1.1" => "2.1.1",
+            "v1.1.1" => "1.1.1", "v0.1.1" => "0.1.1",
+        ]
         generate_version_file(versionfile, entries)
         verify_version_file(versionfile, entries)
         generate_redirect_file(redirectfile, entries)
@@ -193,9 +202,11 @@ end
         versions = ["v#"]
         entries, symlinks = expand_versions(tmpdir, versions)
         @test entries == ["v2.1", "v1.1"]
-        @test symlinks == ["v2.1"=>"2.1.1", "v1.1"=>"1.1.1", "v2"=>"2.1.1", "v1"=>"1.1.1",
-                           "v2.0"=>"v2.0.1", "v1.0"=>"v1.0.1", "v0.1"=>"0.1.1",
-                           "v2.1.1"=>"2.1.1", "v1.1.1"=>"1.1.1", "v0.1.1"=>"0.1.1"]
+        @test symlinks == [
+            "v2.1" => "2.1.1", "v1.1" => "1.1.1", "v2" => "2.1.1", "v1" => "1.1.1",
+            "v2.0" => "v2.0.1", "v1.0" => "v1.0.1", "v0.1" => "0.1.1",
+            "v2.1.1" => "2.1.1", "v1.1.1" => "1.1.1", "v0.1.1" => "0.1.1",
+        ]
         generate_version_file(versionfile, entries)
         verify_version_file(versionfile, entries)
         generate_redirect_file(redirectfile, entries)
@@ -204,11 +215,15 @@ end
         # case3: all released versions
         versions = ["v#.#.#"]
         entries, symlinks = expand_versions(tmpdir, versions)
-        @test entries == ["v2.1.1", "v2.1.0", "v2.0.1", "v2.0.0", "v1.1.1", "v1.1.0",
-                          "v1.0.1", "v1.0.0", "v0.1.1", "v0.1.0"]
-        @test symlinks == ["v2.1.1"=>"2.1.1", "v1.1.1"=>"1.1.1", "v0.1.1"=>"0.1.1",
-                           "v2"=>"2.1.1", "v1"=>"1.1.1", "v2.1"=>"2.1.1",
-                           "v2.0"=>"v2.0.1", "v1.1"=>"1.1.1", "v1.0"=>"v1.0.1", "v0.1"=>"0.1.1"]
+        @test entries == [
+            "v2.1.1", "v2.1.0", "v2.0.1", "v2.0.0", "v1.1.1", "v1.1.0",
+            "v1.0.1", "v1.0.0", "v0.1.1", "v0.1.0",
+        ]
+        @test symlinks == [
+            "v2.1.1" => "2.1.1", "v1.1.1" => "1.1.1", "v0.1.1" => "0.1.1",
+            "v2" => "2.1.1", "v1" => "1.1.1", "v2.1" => "2.1.1",
+            "v2.0" => "v2.0.1", "v1.1" => "1.1.1", "v1.0" => "v1.0.1", "v0.1" => "0.1.1",
+        ]
         generate_version_file(versionfile, entries)
         verify_version_file(versionfile, entries)
         generate_redirect_file(redirectfile, entries)
@@ -259,21 +274,97 @@ end
         @test !isfile(redirectfile)
     end
 
-    # Exhaustive Conversion from Markdown to Nodes.
-    @testset "MD2Node" begin
-        for mod in Base.Docs.modules
-            for (binding, multidoc) in DocSystem.getmeta(mod)
-                for (typesig, docstr) in multidoc.docs
-                    md = Documenter.DocSystem.parsedoc(docstr)
-                    @test string(HTMLWriter.mdconvert(md; footnotes=[])) isa String
+    @testset "HTML: size_threshold" begin
+        @test_throws ArgumentError Documenter.HTML(size_threshold = 0)
+        @test_throws ArgumentError Documenter.HTML(size_threshold = -100)
+        @test_throws ArgumentError Documenter.HTML(size_threshold_warn = 0)
+        @test_throws ArgumentError Documenter.HTML(size_threshold_warn = -100)
+        @test_throws ArgumentError Documenter.HTML(size_threshold = -100, size_threshold_warn = -100)
+        @test_throws ArgumentError Documenter.HTML(size_threshold = 1, size_threshold_warn = 2)
+        # Less than size_threshold_warn:
+        @test_throws ArgumentError Documenter.HTML(size_threshold = 1)
+
+        html = Documenter.HTML()
+        @test html.size_threshold == 200 * 2^10
+        @test html.size_threshold_warn == 100 * 2^10
+
+        html = Documenter.HTML(size_threshold = nothing)
+        @test html.size_threshold == typemax(Int)
+        @test html.size_threshold_warn == 100 * 2^10
+
+        html = Documenter.HTML(size_threshold = nothing, size_threshold_warn = 1234)
+        @test html.size_threshold == typemax(Int)
+        @test html.size_threshold_warn == 1234
+
+        html = Documenter.HTML(size_threshold_warn = nothing)
+        @test html.size_threshold == 200 * 2^10
+        @test html.size_threshold_warn == 200 * 2^10
+
+        html = Documenter.HTML(size_threshold = 1234, size_threshold_warn = nothing)
+        @test html.size_threshold == 1234
+        @test html.size_threshold_warn == 1234
+
+        html = Documenter.HTML(size_threshold = 12345, size_threshold_warn = 1234)
+        @test html.size_threshold == 12345
+        @test html.size_threshold_warn == 1234
+    end
+
+    @testset "HTML: format_units" begin
+        @test HTMLWriter.format_units(0) == "0.0 (bytes)"
+        @test HTMLWriter.format_units(1) == "1.0 (bytes)"
+        @test HTMLWriter.format_units(1023) == "1023.0 (bytes)"
+        @test HTMLWriter.format_units(1024) == "1.0 (KiB)"
+        @test HTMLWriter.format_units(4000) == "3.91 (KiB)"
+        @test HTMLWriter.format_units(2^20 + 123) == "1.0 (MiB)"
+        @test HTMLWriter.format_units(typemax(Int)) == "(no limit)"
+    end
+
+    @testset "HTML: _strip_latex_math_delimiters" begin
+        for content in [
+                "a",
+                "x_1",
+                "x_{1} + x_{2}",
+                "\\begin{array}x_1\\\nx_2\\end{array}",
+            ]
+            for (left, right) in [("\\[", "\\]"), ("\$", "\$"), ("\$\$", "\$\$")]
+                for (input, output) in [
+                        content => (false, content),
+                        "$left$content$right" => (true, content),
+                        " $left$content$right" => (true, content),
+                        "$left$content$right " => (true, content),
+                        "\t$left$content$right  " => (true, content),
+                        " \t$left$content$right\t\t" => (true, content),
+                    ]
+                    @test _strip_latex_math_delimiters(input) == output
+                end
+            end
+            # Test that miss-matched delimiters are not treated as math
+            # delimiters
+            for (left, right) in [
+                    ("\\[", ""),
+                    ("\$", ""),
+                    ("\$\$", ""),
+                    ("", "\\]"),
+                    ("", "\$"),
+                    ("", "\$\$"),
+                    ("\$", "\\]"),
+                    ("\$\$", "\$"),
+                    ("\$", "\$\$"),
+                ]
+                for input in [
+                        content,
+                        "$left$content$right",
+                        " $left$content$right",
+                        "$left$content$right ",
+                        "\t$left$content$right  ",
+                        " \t$left$content$right\t\t",
+                    ]
+                    @test _strip_latex_math_delimiters(input) == (false, input)
                 end
             end
         end
     end
 
-    @testset "Dollar escapes" begin
-        @test string(HTMLWriter.mdconvert("\$1")) == "\$1"
-        @test string(HTMLWriter.mdconvert("\$")) == "<span>\$</span>"
-    end
 end
+
 end

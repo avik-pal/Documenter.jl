@@ -1,3 +1,5 @@
+.vscode
+
 *.jl.cov
 *.jl.*.cov
 *.jl.mem
@@ -9,8 +11,13 @@ test/formats/builds/
 test/missingdocs/build/
 test/nongit/build/
 test/errors/build/
+test/plugins/build/
 test/prerender/build/
+test/themes/dev/
 test/workdir/builds/
+test/quietly-logs/
+docs/dev/
 docs/build/
-docs/pdf/build/
+docs/build-pdf/
 docs/site/
+docs/src/release-notes.md

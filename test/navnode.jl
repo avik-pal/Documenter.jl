@@ -2,25 +2,24 @@ module NavNodeTests
 
 using Test
 
-import Documenter: Documents, Builder
-import Documenter.Documents: NavNode
+import Documenter: Documenter, Builder, NavNode
 
 mutable struct FakeDocumentBlueprint
-    pages   :: Dict{String, Nothing}
+    pages::Dict{String, Nothing}
     FakeDocumentBlueprint() = new(Dict())
 end
 mutable struct FakeDocumentInternal
-    navlist :: Vector{NavNode}
+    navlist::Vector{NavNode}
     FakeDocumentInternal() = new([])
 end
 mutable struct FakeDocument
-    internal  :: FakeDocumentInternal
-    blueprint :: FakeDocumentBlueprint
+    internal::FakeDocumentInternal
+    blueprint::FakeDocumentBlueprint
     FakeDocument() = new(FakeDocumentInternal(), FakeDocumentBlueprint())
 end
 
 @testset "NavNode" begin
-    @test fieldtype(FakeDocumentInternal, :navlist) == fieldtype(Documents.Internal, :navlist)
+    @test fieldtype(FakeDocumentInternal, :navlist) == fieldtype(Documenter.Internal, :navlist)
 
     pages = [
         "page1.md",
@@ -36,11 +35,11 @@ end
     ]
     doc = FakeDocument()
     doc.blueprint.pages = Dict(map(i -> "page$i.md" => nothing, 1:8))
-    navtree = Builder.walk_navpages(pages, nothing, doc)
+    navtree = Documenter.walk_navpages(pages, nothing, doc)
     navlist = doc.internal.navlist
 
     @test length(navlist) == 6
-    for (i,navnode) in enumerate(navlist)
+    for (i, navnode) in enumerate(navlist)
         @test navnode.page == "page$i.md"
     end
 
@@ -55,10 +54,17 @@ end
     @test section.page === nothing
     @test length(section.children) == 3
 
-    navpath = Documents.navpath(navlist[5])
+    navpath = Documenter.navpath(navlist[5])
     @test length(navpath) == 3
     @test navpath[1] === section
     @test navpath[3] === navlist[5]
+
+    @test repr(navlist[1]) == "NavNode(\"page1.md\", nothing, nothing)"
+    @test repr(navlist[2]) == "NavNode(\"page2.md\", \"Page2\", nothing)"
+    @test repr(navlist[3]) == "NavNode(\"page3.md\", nothing, NavNode(nothing, ...))"
+    @test repr(navlist[4]) == "NavNode(\"page4.md\", \"Page4\", NavNode(nothing, ...))"
+    @test repr(navlist[5]) == "NavNode(\"page5.md\", nothing, NavNode(nothing, ...))"
+    @test repr(navlist[6]) == "NavNode(\"page6.md\", nothing, nothing)"
 end
 
 end

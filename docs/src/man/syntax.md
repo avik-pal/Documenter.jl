@@ -5,6 +5,7 @@ For supported Markdown syntax, see the [documentation for the Markdown standard 
 
 ```@contents
 Pages = ["syntax.md"]
+Depth = 2:2
 ```
 
 ## `@docs` block
@@ -58,6 +59,23 @@ have a docstring attached to `foo(::Integer) = ...`, then neither `foo(::Number)
 The only way you can splice that docstring is by listing exactly `foo(::Integer)` in
 the at-docs block.
 
+### [`@docs; canonical=false` block](@id noncanonical-block)
+
+You can pass the `canonical` keyword argument as `false` to `@docs` to indicate
+that the `@docs` should be be considered as non-canonical like so:
+
+````markdown
+```@docs; canonical=false
+makedocs
+```
+````
+
+This is useful when you want to include a docstring inline somewhere, e.g. in
+a tutorial, but the canonical version of the docstring is already in the API
+reference. References will all point to the canonical `@docs` block. For
+a particular docstring, you can include it as many times as you like with
+`@docs ; canonical=false`, but only once without. Non-canonical `@docs` blocks
+are ignored when checking for missing docstrings.
 
 ## `@autodocs` block
 
@@ -154,11 +172,14 @@ Order = [:type]
     When more complex sorting is needed then use `@docs` to define it
     explicitly.
 
+As with `@docs`, you can use `@autodocs; canonical=false` to indicate that the
+`@autodocs` block in non-canonical. See [`@docs; canonical=false` block](@ref
+noncanonical-block).
+
 ## `@ref` link
 
 Used in markdown links as the URL to tell Documenter to generate a cross-reference
-automatically. The text part of the link can be a docstring, header name, or GitHub PR/Issue
-number.
+automatically. The text part of the link can be a code object (between backticks), header name, or GitHub PR/Issue number (`#` followed by a number).
 
 ````markdown
 # Syntax
@@ -178,13 +199,51 @@ makedocs
 
 Plain text in the "text" part of a link will either cross-reference a header, or, when it is
 a number preceded by a `#`, a GitHub issue/pull request. Text wrapped in backticks will
-cross-reference a docstring from a `@docs` block.
+cross-reference a docstring from a `@docs` or `@autodocs` block.
 
-`@ref`s may refer to docstrings or headers on different pages as well as the current page
-using the same syntax.
+The code enclosed in the backticks for such a reference will be evaluated in the
+`CurrentModule`  given in the `@meta` block of the current page (`Main` by default). For
+`@ref` links inside a docstring, the `CurrentModule` is automatically set to the module
+containing the docstring.
 
-Note that depending on what the `CurrentModule` is set to, a docstring `@ref` may need to
-be prefixed by the module which defines it.
+A reference that is a fully qualified name (e.g. ```[`Example.domath`](@ref)``` or `[domath](@ref Example.domath)`) will also be resolved in `Main`.
+That is, loading a package in `docs/make.jl` ensures that fully qualified `@ref` links work from anywhere.
+
+The `@ref` links may refer to docstrings or headers on different pages as well as the
+current page using the same syntax.
+
+
+### Named `@ref`s
+
+It is also possible to override the destination of an `@ref`-link by adding the appropriate
+label to the link, such as a docstring reference or a page heading.
+
+```markdown
+Both of the following references point to `g` found in module `Main.Other`:
+
+* [`Main.Other.g`](@ref)
+* [the `g` function](@ref Main.Other.g)
+
+Both of the following point to the heading "On Something":
+
+* [On Something](@ref)
+* [The section about something.](@ref "On Something")
+```
+
+This can be useful to avoid having to write fully qualified names for references that
+are not imported into the current module, or when the text displayed in the link is
+used to add additional meaning to the surrounding text, such as
+
+```markdown
+Use [`for i = 1:10 ...`](@ref for) to loop over all the numbers from 1 to 10.
+```
+
+!!! note
+
+    Named doc `@ref`s should be used sparingly since writing unqualified names may, in some
+    cases, make it difficult to tell *which* function is being referred to in a particular
+    docstring if there happen to be several modules that provide definitions with the same
+    name.
 
 ### Duplicate Headers
 
@@ -209,40 +268,22 @@ to headers on different pages in the same way as unnamed ones do.
 Duplicate docstring references do not occur since splicing the same docstring into a
 document more than once is disallowed.
 
-### Named doc `@ref`s
+!!! note "Label precedence"
 
-Docstring `@ref`s can also be "named" in a similar way to headers as shown in the
-[Duplicate Headers](@ref) section above. For example
+    Both user-defined and internally generated header reference labels take precedence over
+    docstring references, in case there is a conflict.
 
-```julia
-module Mod
+### `@extref` link
 
-"""
-Both of the following references point to `g` found in module `Main.Other`:
+Using the [`DocumenterInterLinks` plugin](https://github.com/JuliaDocs/DocumenterInterLinks.jl#readme),
+it is possible to cross-reference the documentation of other projects whose documentation
+is generated by Documenter or [Sphinx](https://www.sphinx-doc.org/en/master/), using
+`@extref` links similar to the built-in `@ref` links for internal references.
 
-  * [`Main.Other.g`](@ref)
-  * [`g`](@ref Main.Other.g)
+See [External Cross-References](@ref) and the
+[documentation of the `DocumenterInterLinks` package](http://juliadocs.org/DocumenterInterLinks.jl/stable/)
+for more details.
 
-"""
-f(args...) = # ...
-
-end
-```
-
-This can be useful to avoid having to write fully qualified names for references that
-are not imported into the current module, or when the text displayed in the link is
-used to add additional meaning to the surrounding text, such as
-
-```markdown
-Use [`for i = 1:10 ...`](@ref for) to loop over all the numbers from 1 to 10.
-```
-
-!!! note
-
-    Named doc `@ref`s should be used sparingly since writing unqualified names may, in some
-    cases, make it difficult to tell *which* function is being referred to in a particular
-    docstring if there happen to be several modules that provide definitions with the same
-    name.
 
 ## `@meta` block
 
@@ -257,6 +298,10 @@ page. Currently recognised keys:
 - `EditURL`: link to where the page can be edited. This defaults to the `.md` page itself,
   but if the source is something else (for example if the `.md` page is generated as part of
   the doc build) this can be set, either as a local link, or an absolute url.
+- `Description`: a page-specific description that gets displayed in search engines and
+  link previews. Overrides the site-wide description in [`makedocs`](@ref).
+- `Draft`: boolean for overriding the global draft mode for the page.
+- `CollapsedDocStrings`: for output formats that support this (i.e. only [`HTML`](@ref Documenter.HTML) currently), if set to `true`, render all docstrings as collapsed by default.
 
 Example:
 
@@ -320,9 +365,35 @@ Depth = 5
 ````
 
 As with `@index` if `Pages` is not provided then all pages are included. The default
-`Depth` value is `2`.
+`Depth` value is `2`, i.e. header levels 1 and 2 are included. `Depth` also accepts
+`UnitRange`s, to make it possible to configure also the minimum header level to be shown.
+`Depth = 2:3` can be used to include only headers with levels 2-3, for example.
 
-## `@example` block
+!!! tip "Replicating sidebar"
+
+    In some cases it might be desirable to replicate some subsection of the sidebar in an `@contents` block.
+    A possible pattern to achieve this without duplicating code is to define the `pages` keyword entry through a global variable in `make.jl`, e.g.
+
+    ```julia
+    SUBSECTION_PAGES = ["subsection/a.md", "subsection/b.md"]
+    makedocs(
+        pages = [
+            "index.md",
+            "Subsection" => SUBSECTION_PAGES,
+        ...
+    ```
+
+    That variable will exist in the `Main` module and can be reused in the `@contents` and other blocks, e.g.
+
+    ````markdown
+    ```@contents
+    Pages = Main.SUBSECTION_PAGES
+    ```
+    ````
+
+    Documenter will then list the contents of the "Subsection" pages, and they will always appear in the same order as they are in the sidebar.
+
+## [`@example` block](@id reference-at-example)
 
 Evaluates the code block and inserts the result of the last expression into the final document along with the
 original source code. If the last expression returns `nothing`, the `stdout`
@@ -441,10 +512,10 @@ files into that directory. This allows the images to be easily referenced withou
 worry about relative paths.
 
 !!! info
-    If you use [Plots.jl](https://github.com/JuliaPlots/Plots.jl) with the default backend 
+    If you use [Plots.jl](https://github.com/JuliaPlots/Plots.jl) with the default backend
     [GR.jl](https://github.com/jheinen/GR.jl), you will likely see warnings like
     ```
-    qt.qpa.xcb: could not connect to display 
+    qt.qpa.xcb: could not connect to display
     qt.qpa.plugin: Could not load the Qt platform plugin "xcb" in "" even though it was found.
     ```
     To fix these, you need to set the environment variable `GKSwstype` to `100`. For example,
@@ -618,7 +689,7 @@ Named `@repl <name>` blocks behave in the same way as named `@example <name>` bl
     `for` loops etc. When using Documenter with Julia 1.5 or above, Documenter uses the soft
     scope in `@repl`-blocks and REPL-type doctests.
 
-## `@setup <name>` block
+## [`@setup <name>` block](@id reference-at-setup)
 
 These are similar to `@example` blocks, but both the input and output are hidden from the
 final document. This can be convenient if there are several lines of setup code that need to be
@@ -644,7 +715,8 @@ println(iris)
 
 ## `@eval` block
 
-Evaluates the contents of the block and inserts the resulting value into the final document.
+Evaluates the contents of the block and inserts the resulting value into the final document,
+unless the last expression evaluates to `nothing`.
 
 In the following example we use the PyPlot package to generate a plot and display it in the
 final document.
@@ -665,6 +737,10 @@ nothing
 ![](plot.svg)
 ````
 
+Instead of returning `nothing` in the example above we could have returned a new
+`Markdown.MD` object through `Markdown.parse`. This can be more appropriate when the
+filename is not known until evaluation of the block itself.
+
 Another example is to generate markdown tables from machine readable data formats such as CSV or JSON.
 
 ````markdown
@@ -672,20 +748,20 @@ Another example is to generate markdown tables from machine readable data format
 using CSV
 using Latexify
 df = CSV.read("table.csv")
-mdtable(df,latex=false)
+mdtable(df, latex=false)
 ```
 ````
 
-Which will generate a markdown version of the CSV file table.csv and render it in the output format.
+which will generate a markdown version of the CSV file table.csv and render it in the output format.
+
+The final expression in an `@eval` block must be either `nothing` or a valid `Markdown.MD`
+object. Other objects will generate a warning and will be rendered in text form as a code block,
+but this behavior can change and should not be relied upon.
 
 Note that each `@eval` block evaluates its contents within a separate module. When
 evaluating each block the present working directory, `pwd`, is set to the directory in
 `build` where the file will be written to, and the paths in `include` calls are interpreted
 to be relative to `pwd`.
-
-Also, instead of returning `nothing` in the example above we could have returned a new
-`Markdown.MD` object through `Markdown.parse`. This can be more appropriate when the
-filename is not known until evaluation of the block itself.
 
 !!! note
 
@@ -710,7 +786,7 @@ using the `@raw` block.
 
 ````markdown
 ```@raw html
-<svg style="display: block; margin: 0 auto;" width="5em" heigth="5em">
+<svg style="display: block; margin: 0 auto;" width="5em" height="5em">
 	<circle cx="2.5em" cy="2.5em" r="2em" stroke="black" stroke-width=".1em" fill="red" />
 </svg>
 ```
@@ -719,7 +795,7 @@ using the `@raw` block.
 It will show up as follows, with code having been copied over verbatim to the HTML file.
 
 ```@raw html
-<svg style="display: block; margin: 0 auto;" width="5em" heigth="5em">
+<svg style="display: block; margin: 0 auto;" width="5em" height="5em">
 	<circle cx="2.5em" cy="2.5em" r="2em" stroke="black" stroke-width=".1em" fill="red" />
     (SVG)
 </svg>

@@ -15,7 +15,7 @@ import IOCapture
 # ------------------------------------
 function run_doctest(f, args...; kwargs...)
     (result, success, backtrace, output) =
-    c = IOCapture.capture(rethrow = InterruptException) do
+        c = IOCapture.capture(rethrow = InterruptException) do
         # Running inside a Task to make sure that the parent testsets do not interfere.
         t = Task(() -> doctest(args...; kwargs...))
         schedule(t)
@@ -35,7 +35,7 @@ function run_doctest(f, args...; kwargs...)
     --------------------------------------------------------------------------------
     """ c.value stacktrace(c.backtrace)
 
-    f(c.value, !c.error, c.backtrace, c.output)
+    return f(c.value, !c.error, c.backtrace, c.output)
 end
 
 """
@@ -143,7 +143,48 @@ Stacktrace:
 [...]
 ```
 """
-module ParseErrorSuccess end
+module ParseErrorSuccess_1x00 end
+
+"""
+```jldoctest
+julia> map(tuple, 1/(i+j) for i=1:2, j=1:2, [1:4;])
+ERROR: ParseError:
+# Error @ none:1:44
+map(tuple, 1/(i+j) for i=1:2, j=1:2, [1:4;])
+#                                          └ ── invalid iteration spec: expected one of `=` `in` or `∈`
+Stacktrace:
+[...]
+```
+```jldoctest
+julia> 1.2.3
+ERROR: ParseError:
+# Error @ none:1:1
+1.2.3
+└──┘ ── invalid numeric constant
+[...]
+```
+```jldoctest
+println(9.8.7)
+# output
+ERROR: ParseError:
+# Error @ none:1:9
+println(9.8.7)
+#       └──┘ ── invalid numeric constant
+[...]
+```
+```jldoctest
+julia> Meta.ParseError("foo")
+Base.Meta.ParseError("foo", nothing)
+
+julia> Meta.ParseError("foo") |> throw
+ERROR: ParseError("foo")
+Stacktrace:
+[...]
+```
+"""
+module ParseErrorSuccess_1x10 end
+# The JuliaSyntax swap in 1.10 changed the printing of parse errors quite considerably
+ParseErrorSuccess() = (VERSION >= v"1.10.0-DEV.1520") ? ParseErrorSuccess_1x10 : ParseErrorSuccess_1x00
 
 """
 ```jldoctest
@@ -249,12 +290,12 @@ module BadDocTestKwargs3 end
 
     # DoctestFilters
     df = [r"global (filter|FILTER)"]
-    run_doctest(nothing, [DoctestFilters], doctestfilters=df) do result, success, backtrace, output
+    run_doctest(nothing, [DoctestFilters], doctestfilters = df) do result, success, backtrace, output
         @test success
     end
 
     # Parse errors in doctests (https://github.com/JuliaDocs/Documenter.jl/issues/1046)
-    run_doctest(nothing, [ParseErrorSuccess]) do result, success, backtrace, output
+    run_doctest(nothing, [ParseErrorSuccess()]) do result, success, backtrace, output
         @test success
         @test result isa Test.DefaultTestSet
     end

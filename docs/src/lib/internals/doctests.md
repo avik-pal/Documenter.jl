@@ -1,5 +1,10 @@
+```@meta
+CollapsedDocStrings = true
+```
+
 # DocTests
 
 ```@autodocs
-Modules = [Documenter.DocTests]
+Modules = [Documenter]
+Pages = ["doctests.jl"]
 ```

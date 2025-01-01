@@ -27,6 +27,17 @@ $code-padding: 0.1em;
 
 $documenter-docstring-background: transparent !default;
 
+// Shared configuration for docstrings/code snippets/admonitions etc.
+$documenter-element-border-width: 2px;
+$documenter-element-border-radius: 4px;
+
+$documenter-docstring-border-width: $documenter-element-border-width;
+$documenter-docstring-border-radius: $documenter-element-border-radius;
+$documenter-codeblock-border-width: $documenter-element-border-width;
+$documenter-codeblock-border-radius: $documenter-element-border-radius;
+$documenter-admonition-border-width: $documenter-element-border-width;
+$documenter-admonition-border-radius: $documenter-element-border-radius;
+
 $documenter-is-dark-theme: false !default;
 
 // Helper functions
@@ -79,10 +90,30 @@ $documenter-main-padding: 1rem !default;
 // to be in px, hence the unit conversion.
 $desktop: round($body-size * ($documenter-max-width + $documenter-sidebar-width + $documenter-sidebar-main-gap + $documenter-main-padding-right - 5rem)/1rem) !default;
 
-// Admonitions
-$message-header-padding: 0.75em;
-$message-body-padding: 1em 1.25em;
-// Docstrings
-$card-content-padding-v: 1rem;
-$card-content-padding-h: 1.25rem;
-$card-content-padding: $card-content-padding-v $card-content-padding-h;
+// Padding for admonitions and docstrings.
+// We'll try to keep the left padding consistent between the various container
+// elements:
+$documenter-container-left-padding: 0.75rem;
+$documenter-admonition-header-padding: 0.5rem $documenter-container-left-padding;
+$documenter-admonition-body-padding: 0.5rem $documenter-container-left-padding;
+$documenter-docstring-header-padding: 0.5rem $documenter-container-left-padding;
+$documenter-docstring-body-padding-h: $documenter-container-left-padding;
+$documenter-docstring-body-padding-v: 0.75rem;
+$documenter-docstring-body-padding: $documenter-docstring-body-padding-v $documenter-docstring-body-padding-h;
+
+// Search Results variables
+$search-result-link-hover: rgba(0, 128, 128, 0.1) !default;
+$search-result-link-text-color: #f1f5f9 !default;
+$search-result-link-text-background-color: #333 !default;
+$search-result-title-text-color: #333 !default;
+$search-result-badge-color: whitesmoke !default;
+$search-result-badge-background-color: #33415580 !default;
+$search-modal-scrollbar-background-color: gray !default;
+$search-modal-kbd-color: rgba(0, 0, 0, 0.6) !default;
+$search-filter-color: #333 !default;
+$search-filter-background-color: whitesmoke !default;
+$search-modal-selected-filter-color: whitesmoke !default;
+$search-modal-selected-filter-background-color: rgba(139, 0, 139, 0.5) !default;
+$search-result-highlight: hsl(48, 100%, 67%) !default;
+
+$input-placeholder-color: #707070 !default;

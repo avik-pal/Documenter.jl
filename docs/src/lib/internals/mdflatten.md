@@ -1,5 +1,9 @@
+```@meta
+CollapsedDocStrings = true
+```
+
 # MDFlatten
 
 ```@autodocs
-Modules = [Documenter.Utilities.MDFlatten]
+Modules = [Documenter.MDFlatten]
 ```

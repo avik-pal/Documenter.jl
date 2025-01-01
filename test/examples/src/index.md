@@ -151,6 +151,15 @@ foobuu
 ```
 
 ```@meta
+DocTestFilters = nothing
+```
+
+```jldoctest
+julia> print("foobar")
+foobar
+```
+
+```@meta
 DocTestFilters = []
 ```
 
@@ -571,4 +580,108 @@ end
 
 ```@example moduleA
 A.f()
+```
+
+## Headings in block context
+
+!!! error "Blocks in block context"
+
+    ```julia
+    x^2
+    ```
+
+    Headings:
+
+    # Heading 1
+    ## Heading 2
+    ### Heading 3
+    #### Heading 4
+    ##### Heading 5
+    ###### Heading 6
+
+Also in block quotes:
+
+> ```julia
+> x^2
+> ```
+>
+> Headings:
+>
+> # Heading 1
+> ## Heading 2
+> ### Heading 3
+> #### Heading 4
+> ##### Heading 5
+> ###### Heading 6
+
+# JuliaValue
+
+It is possible to create pseudo-interpolations with the `Markdown` parser: $foo.
+
+$([1 2 3; 4 5 6])
+
+They do not get evaluated.
+
+# Admonitions
+
+!!! note "'note' admonition"
+    Admonitions look like this. This is a `!!! note`-type admonition.
+
+    Note that admonitions themselves can contain other block-level elements too,
+    such as code blocks. E.g.
+
+    ```julia
+    f(x) = x^2
+    ```
+
+    However, you **can not** have at-blocks, docstrings, doctests etc. in an admonition.
+
+    Headings are OK though:
+    # Heading 1
+    ## Heading 2
+    ### Heading 3
+    #### Heading 4
+    ##### Heading 5
+    ###### Heading 6
+
+!!! info "'info' admonition"
+    This is a `!!! info`-type admonition.
+
+!!! tip "'tip' admonition"
+    This is a `!!! tip`-type admonition.
+
+!!! warning "'warning' admonition"
+    This is a `!!! warning`-type admonition.
+
+!!! danger "'danger' admonition"
+    This is a `!!! danger`-type admonition.
+
+!!! compat "'compat' admonition"
+    This is a `!!! compat`-type admonition.
+
+!!! details "'details' admonition"
+    This is a `!!! details`-type admonition.
+
+!!! ukw "Unknown admonition class"
+    Admonition with an unknown admonition class.
+
+## `@example` outputs to file
+
+```@example
+Main.AT_EXAMPLE_FILES[("png", :big)]
+```
+```@example
+Main.AT_EXAMPLE_FILES[("png", :tiny)]
+```
+```@example
+Main.AT_EXAMPLE_FILES[("webp", :big)]
+```
+```@example
+Main.AT_EXAMPLE_FILES[("webp", :tiny)]
+```
+```@example
+Main.AT_EXAMPLE_FILES[("gif", :big)]
+```
+```@example
+Main.AT_EXAMPLE_FILES[("jpeg", :tiny)]
 ```

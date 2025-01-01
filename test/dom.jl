@@ -2,7 +2,7 @@ module DOMTests
 
 using Test
 
-import Documenter.Utilities.DOM: DOM, @tags, HTMLDocument
+import Documenter.DOM: DOM, @tags, HTMLDocument
 
 @tags div ul li p
 
@@ -35,7 +35,7 @@ import Documenter.Utilities.DOM: DOM, @tags, HTMLDocument
     @test div[:attribute].attributes[1] == (:attribute => "")
     @test div[:attribute => "value"].attributes[1] == (:attribute => "value")
 
-    let d = div(ul(map(li, [string(n) for n = 1:10])))
+    let d = div(ul(map(li, [string(n) for n in 1:10])))
         @test d.name === :div
         @test d.text == ""
         @test isempty(d.attributes)
@@ -45,7 +45,7 @@ import Documenter.Utilities.DOM: DOM, @tags, HTMLDocument
             @test u.text == ""
             @test isempty(u.attributes)
             @test length(u.nodes) === 10
-            for n = 1:10
+            for n in 1:10
                 let v = u.nodes[n]
                     @test v.name === :li
                     @test v.text == ""
@@ -63,13 +63,13 @@ import Documenter.Utilities.DOM: DOM, @tags, HTMLDocument
     @tags script style img
 
     @test string(div(p("one"), p("two"))) == "<div><p>one</p><p>two</p></div>"
-    @test string(div[:key => "value"])    == "<div key=\"value\"></div>"
-    @test string(p(" < > & ' \" "))       == "<p> &lt; &gt; &amp; &#39; &quot; </p>"
-    @test string(img[:src => "source"])   == "<img src=\"source\"/>"
-    @test string(img[:none])              == "<img none/>"
-    @test string(script(" < > & ' \" "))  == "<script> < > & ' \" </script>"
-    @test string(style(" < > & ' \" "))   == "<style> < > & ' \" </style>"
-    @test string(script)                  == "<script>"
+    @test string(div[:key => "value"]) == "<div key=\"value\"></div>"
+    @test string(p(" < > & ' \" ")) == "<p> &lt; &gt; &amp; &#39; &quot; </p>"
+    @test string(img[:src => "source"]) == "<img src=\"source\"/>"
+    @test string(img[:none]) == "<img none/>"
+    @test string(script(" < > & ' \" ")) == "<script> < > & ' \" </script>"
+    @test string(style(" < > & ' \" ")) == "<style> < > & ' \" </style>"
+    @test string(script) == "<script>"
 
     function locally_defined()
         @tags button
@@ -87,6 +87,11 @@ import Documenter.Utilities.DOM: DOM, @tags, HTMLDocument
     # HTMLDocument
     @test string(HTMLDocument(div())) == "<!DOCTYPE html>\n<div></div>\n"
     @test string(HTMLDocument("custom doctype", div())) == "<!DOCTYPE custom doctype>\n<div></div>\n"
+
+    @test DOM.VOID.name === Symbol("#RAW#")
+    @test DOM.VOID.text == ""
+    @test DOM.VOID.nodes[1].text == ""
+    @test isempty(DOM.VOID.attributes)
 end
 
 end

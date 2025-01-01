@@ -118,6 +118,17 @@ Documenter supports a range of admonition types for different circumstances.
 !!! compat "'compat' admonition"
     This is a `!!! compat`-type admonition.
 
+###### TODO admonition
+!!! todo "'todo' admonition"
+    This is a `!!! todo`-type admonition.
+
+###### Details admonition
+Admonitions with type `details` is rendered as a collapsed `<details>` block in
+the HTML output, with the admonition title as the `<summary>`.
+
+!!! details "'details' admonition"
+    This is a `!!! details`-type admonition.
+
 ###### Unknown admonition class
 !!! ukw "Unknown admonition class"
     Admonition with an unknown admonition class. This is a `code example`.
@@ -204,23 +215,23 @@ Lists can also be included in other blocks that can contain block level items
 
 ## Tables
 
-| object | implemented |      value |
-|--------|-------------|------------|
-| `A`    |      ✓      |      10.00 |
-| `BB`   |      ✓      | 1000000.00 |
+| object | implemented | value      |
+| ------ | ----------- | ---------- |
+| `A`    | ✓           | 10.00      |
+| `BB`   | ✓           | 1000000.00 |
 
 With explicit alignment.
 
 | object | implemented |      value |
-| :---   |    :---:    |       ---: |
+| :----- | :---------: | ---------: |
 | `A`    |      ✓      |      10.00 |
 | `BB`   |      ✓      | 1000000.00 |
 
 Tables that are too wide should become scrollable.
 
-| object | implemented |      value |
-| :---   |    :---:    |       ---: |
-| `A`    |      ✓      |      10.00 |
+| object                 |                 implemented                  |                                                      value |
+| :--------------------- | :------------------------------------------: | ---------------------------------------------------------: |
+| `A`                    |                      ✓                       |                                                      10.00 |
 | `BBBBBBBBBBBBBBBBBBBB` | ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓ | 1000000000000000000000000000000000000000000000000000000.00 |
 
 
@@ -249,6 +260,12 @@ To see an example of a level 1 heading see the page title and for level 2 headin
 
 !!! note "Headings in sidebars"
     Level 1 and 2 heading show up in the sidebar, for the current page.
+
+Note that in docstrings, the headings get rewritten as just bold text right now:
+
+```@docs
+DocumenterShowcase.baz
+```
 
 ## Docstrings
 
@@ -303,6 +320,20 @@ DocumenterShowcase.bar
 
 If you have very many docstrings, you may also want to consider using the [`@autodocs` block](@ref) which can include a whole set of docstrings automatically based on certain filtering options
 
+Both `@docs` and `@autodocs` support the [`canonical=false` keyword argument](@ref noncanonical-block). This can be used to include a docstring more than once
+
+````markdown
+```@docs; canonical=false
+DocumenterShowcase.bar
+```
+````
+
+We then see the same docstring as above
+
+```@docs; canonical=false
+DocumenterShowcase.bar
+```
+
 ### An index of docstrings
 
 The [`@index` block](@ref) can be used to generate a list of all the docstrings on a page (or even across pages) and will look as follows
@@ -344,9 +375,57 @@ Script-style doctests are supported too:
 4
 ```
 
+### Setup code
+
+You can have setup code for doctests that gets executed before the actual doctest.
+For example, the following doctest needs to have the `Documenter` module to be present.
+
+```jldoctest; setup=:(using Documenter)
+julia> Documenter.splitexpr(:(Foo.Bar.baz))
+(:(Foo.Bar), :(:baz))
+```
+
+This is achieved by the `setup` keyword to `jldoctest`.
+
+````
+```jldoctest; setup=:(using Documenter)
+````
+
+The alternative approach is to use the `DocTestSetup` keys in `@meta`-blocks, which will apply across multiple doctests.
+
+````markdown
+```@meta
+DocTestSetup = quote
+  f(x) = x^2
+end
+```
+````
+```@meta
+DocTestSetup = quote
+  f(x) = x^2
+end
+```
+
+```jldoctest
+julia> f(2)
+4
+```
+
+The doctests and `@meta` blocks are evaluated sequentially on each page, so you can always unset the test code by setting it back to `nothing`.
+
+````markdown
+```@meta
+DocTestSetup = nothing
+```
+````
+```@meta
+DocTestSetup = nothing
+```
+
+
 ## Running interactive code
 
-[`@example` block](@ref) run a code snippet and insert the output into the document.
+[`@example` block](@ref reference-at-example) run a code snippet and insert the output into the document.
 E.g. the following Markdown
 
 ````markdown
@@ -392,8 +471,8 @@ println("Hello World")
 
 ### Color output
 
-Output from [`@repl` block](@ref)s and [`@example` block](@ref)s support colored output,
-tranforming ANSI color codes to HTML.
+Output from [`@repl` block](@ref)s and [`@example` block](@ref reference-at-example)s support colored output,
+transforming ANSI color codes to HTML.
 
 !!! compat "Julia 1.6"
     Color output requires Julia 1.6 or higher.
@@ -472,36 +551,94 @@ median(xs)
 sum(xs)
 ```
 
-## Doctest showcase
+### Named blocks
 
-Currently exists just so that there would be doctests to run in manual pages of Documenter's
-manual. This page does not show up in navigation.
+Generally, each blocks gets evaluate in a separate, clean context (i.e. no variables from previous blocks will be polluting the namespace etc).
+However, you can also re-use a namespace by giving the blocks a name.
 
-```jldoctest
-julia> 2 + 2
-4
+````markdown
+```@example block-name
+x = 40
+```
+will show up like this:
+````
+```@example block-name
+x = 40
 ```
 
-The following doctests needs doctestsetup:
-
-```jldoctest; setup=:(using Documenter)
-julia> Documenter.Utilities.splitexpr(:(Foo.Bar.baz))
-(:(Foo.Bar), :(:baz))
+````markdown
+```@example block-name
+x + 1
+```
+will show up like this:
+````
+```@example block-name
+x + 1
 ```
 
-Let's also try `@meta` blocks:
+When you need setup code that you do not wish to show in the generated documentation, you can use [an `@setup` block](@ref reference-at-setup):
 
-```@meta
-DocTestSetup = quote
-  f(x) = x^2
-end
+````markdown
+```@setup block-name
+x = 42
+```
+````
+```@setup block-name
+x = 42
 ```
 
-```jldoctest
-julia> f(2)
-4
+The [`@setup` block](@ref reference-at-setup) essentially acts as a hidden [`@example` block](@ref reference-at-example).
+Any state it sets up, you can access in subsequent blocks with the same name.
+For example, the following `@example` block
+
+````markdown
+```@example block-name
+x
+```
+````
+
+will show up like this:
+
+```@example block-name
+x
 ```
 
-```@meta
-DocTestSetup = nothing
+You also have continued blocks which do not evaluate immediately.
+
+````markdown
+```@example block-name; continued = true
+y = 99
+```
+````
+```@example block-name; continued = true
+y = 99
+```
+
+The continued evaluation only applies to [`@example` blocks](@ref reference-at-example) and so if you put, for example, an `@repl` block in between, it will lead to an error, because the `y = 99` line of code has not run yet.
+
+````markdown
+```@repl block-name
+x
+y
+```
+````
+
+```@repl block-name
+x
+y
+```
+
+Another [`@example` block](@ref reference-at-example) with the same name will, however, finish evaluating it.
+So a block like
+
+````markdown
+```@example block-name
+(x, y)
+```
+````
+
+will lead to
+
+```@example block-name
+(x, y)
 ```

@@ -1,5 +1,9 @@
+```@meta
+CollapsedDocStrings = true
+```
+
 # TextDiff
 
 ```@autodocs
-Modules = [Documenter.Utilities.TextDiff]
+Modules = [Documenter.TextDiff]
 ```

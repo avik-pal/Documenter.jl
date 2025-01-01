@@ -56,11 +56,12 @@ function documenter_key_previews(cfg::DeployConfig)
 end
 
 """
-    Documenter.deploy_folder(cfg::DeployConfig; repo, devbranch, push_preview, devurl, kwargs...)
+    Documenter.deploy_folder(cfg::DeployConfig; repo, devbranch, push_preview, devurl,
+                             tag_prefix, kwargs...)
 
 Return a `DeployDecision`.
-This function is called with the `repo`, `devbranch`, `push_preview` and `devurl`
-arguments from [`deploydocs`](@ref).
+This function is called with the `repo`, `devbranch`, `push_preview`, `tag_prefix`,
+and `devurl` arguments from [`deploydocs`](@ref).
 
 !!! note
     Implementations of this functions should accept trailing `kwargs...` for
@@ -72,7 +73,7 @@ function deploy_folder(cfg::DeployConfig; kwargs...)
     return DeployDecision(; all_ok = false)
 end
 function deploy_folder(::Nothing; kwargs...)
-    @warn "Documenter could not auto-detect the building environment Skipping deployment."
+    @warn "Documenter could not auto-detect the building environment. Skipping deployment."
     return DeployDecision(; all_ok = false)
 end
 
@@ -98,7 +99,7 @@ This method must be supported by configs that push with HTTPS, see
 """
 function authenticated_repo_url end
 
-post_status(cfg::Union{DeployConfig,Nothing}; kwargs...) = nothing
+post_status(cfg::Union{DeployConfig, Nothing}; kwargs...) = nothing
 
 marker(x) = x ? "✔" : "✘"
 
@@ -150,25 +151,30 @@ struct Travis <: DeployConfig
     travis_event_type::String
 end
 function Travis()
-    travis_branch       = get(ENV, "TRAVIS_BRANCH",        "")
-    travis_pull_request = get(ENV, "TRAVIS_PULL_REQUEST",  "")
-    travis_repo_slug    = get(ENV, "TRAVIS_REPO_SLUG",     "")
-    travis_tag          = get(ENV, "TRAVIS_TAG",           "")
-    travis_event_type   = get(ENV, "TRAVIS_EVENT_TYPE",    "")
-    return Travis(travis_branch, travis_pull_request,
-        travis_repo_slug, travis_tag, travis_event_type)
+    travis_branch = get(ENV, "TRAVIS_BRANCH", "")
+    travis_pull_request = get(ENV, "TRAVIS_PULL_REQUEST", "")
+    travis_repo_slug = get(ENV, "TRAVIS_REPO_SLUG", "")
+    travis_tag = get(ENV, "TRAVIS_TAG", "")
+    travis_event_type = get(ENV, "TRAVIS_EVENT_TYPE", "")
+    return Travis(
+        travis_branch, travis_pull_request,
+        travis_repo_slug, travis_tag, travis_event_type
+    )
 end
 
 # Check criteria for deployment
-function deploy_folder(cfg::Travis;
-                       repo,
-                       repo_previews = repo,
-                       branch = "gh-pages",
-                       branch_previews = branch,
-                       devbranch,
-                       push_preview,
-                       devurl,
-                       kwargs...)
+function deploy_folder(
+        cfg::Travis;
+        repo,
+        repo_previews = repo,
+        branch = "gh-pages",
+        branch_previews = branch,
+        devbranch,
+        push_preview,
+        devurl,
+        tag_prefix = "",
+        kwargs...
+    )
     io = IOBuffer()
     all_ok = true
     ## Determine build type; release, devbranch or preview
@@ -189,7 +195,7 @@ function deploy_folder(cfg::Travis;
         pr_ok = cfg.travis_pull_request == "false"
         println(io, "- $(marker(pr_ok)) ENV[\"TRAVIS_PULL_REQUEST\"]=\"$(cfg.travis_pull_request)\" is \"false\"")
         all_ok &= pr_ok
-        tag_nobuild = version_tag_strip_build(cfg.travis_tag)
+        tag_nobuild = version_tag_strip_build(cfg.travis_tag; tag_prefix)
         ## If a tag exist it should be a valid VersionNumber
         tag_ok = tag_nobuild !== nothing
         all_ok &= tag_ok
@@ -251,11 +257,13 @@ function deploy_folder(cfg::Travis;
         """
     end
     if all_ok
-        return DeployDecision(; all_ok = true,
-                                branch = deploy_branch,
-                                is_preview = is_preview,
-                                repo = deploy_repo,
-                                subfolder = subfolder)
+        return DeployDecision(;
+            all_ok = true,
+            branch = deploy_branch,
+            is_preview = is_preview,
+            repo = deploy_repo,
+            subfolder = subfolder
+        )
     else
         return DeployDecision(; all_ok = false)
     end
@@ -274,7 +282,7 @@ Implementation of `DeployConfig` for deploying from GitHub Actions.
 The following environment variables influences the build
 when using the `GitHubActions` configuration:
 
- - `GITHUB_EVENT_NAME`: must be set to `push` or `workflow_dispatch`.
+ - `GITHUB_EVENT_NAME`: must be set to `push`, `workflow_dispatch`, or `schedule`.
    This avoids deployment on pull request builds.
 
  - `GITHUB_REPOSITORY`: must match the value of the `repo` keyword to [`deploydocs`](@ref).
@@ -286,7 +294,7 @@ when using the `GitHubActions` configuration:
    see the manual section for [GitHub Actions](@ref) for more information.
 
 The `GITHUB_*` variables are set automatically on GitHub Actions, see the
-[documentation](https://docs.github.com/en/actions/reference/environment-variables#default-environment-variables).
+[documentation](https://docs.github.com/en/actions/learn-github-actions/variables#default-environment-variables).
 """
 struct GitHubActions <: DeployConfig
     github_repository::String
@@ -296,20 +304,23 @@ end
 function GitHubActions()
     github_repository = get(ENV, "GITHUB_REPOSITORY", "") # "JuliaDocs/Documenter.jl"
     github_event_name = get(ENV, "GITHUB_EVENT_NAME", "") # "push", "pull_request" or "cron" (?)
-    github_ref        = get(ENV, "GITHUB_REF",        "") # "refs/heads/$(branchname)" for branch, "refs/tags/$(tagname)" for tags
+    github_ref = get(ENV, "GITHUB_REF", "") # "refs/heads/$(branchname)" for branch, "refs/tags/$(tagname)" for tags
     return GitHubActions(github_repository, github_event_name, github_ref)
 end
 
 # Check criteria for deployment
-function deploy_folder(cfg::GitHubActions;
-                       repo,
-                       repo_previews = repo,
-                       branch = "gh-pages",
-                       branch_previews = branch,
-                       devbranch,
-                       push_preview,
-                       devurl,
-                       kwargs...)
+function deploy_folder(
+        cfg::GitHubActions;
+        repo,
+        repo_previews = repo,
+        branch = "gh-pages",
+        branch_previews = branch,
+        devbranch,
+        push_preview,
+        devurl,
+        tag_prefix = "",
+        kwargs...
+    )
     io = IOBuffer()
     all_ok = true
     ## Determine build type
@@ -327,12 +338,12 @@ function deploy_folder(cfg::GitHubActions;
     println(io, "- $(marker(repo_ok)) ENV[\"GITHUB_REPOSITORY\"]=\"$(cfg.github_repository)\" occurs in repo=\"$(repo)\"")
     if build_type === :release
         ## Do not deploy for PRs
-        event_ok = cfg.github_event_name == "push" || cfg.github_event_name == "workflow_dispatch"
+        event_ok = in(cfg.github_event_name, ["push", "workflow_dispatch", "schedule"])
         all_ok &= event_ok
-        println(io, "- $(marker(event_ok)) ENV[\"GITHUB_EVENT_NAME\"]=\"$(cfg.github_event_name)\" is \"push\" or \"workflow_dispatch\"")
+        println(io, "- $(marker(event_ok)) ENV[\"GITHUB_EVENT_NAME\"]=\"$(cfg.github_event_name)\" is \"push\", \"workflow_dispatch\" or \"schedule\"")
         ## If a tag exist it should be a valid VersionNumber
         m = match(r"^refs\/tags\/(.*)$", cfg.github_ref)
-        tag_nobuild = version_tag_strip_build(m.captures[1])
+        tag_nobuild = version_tag_strip_build(m.captures[1]; tag_prefix)
         tag_ok = tag_nobuild !== nothing
         all_ok &= tag_ok
         println(io, "- $(marker(tag_ok)) ENV[\"GITHUB_REF\"]=\"$(cfg.github_ref)\" contains a valid VersionNumber")
@@ -343,9 +354,9 @@ function deploy_folder(cfg::GitHubActions;
         subfolder = m === nothing ? nothing : tag_nobuild
     elseif build_type === :devbranch
         ## Do not deploy for PRs
-        event_ok = cfg.github_event_name == "push" || cfg.github_event_name == "workflow_dispatch"
+        event_ok = in(cfg.github_event_name, ["push", "workflow_dispatch", "schedule"])
         all_ok &= event_ok
-        println(io, "- $(marker(event_ok)) ENV[\"GITHUB_EVENT_NAME\"]=\"$(cfg.github_event_name)\" is \"push\" or \"workflow_dispatch\"")
+        println(io, "- $(marker(event_ok)) ENV[\"GITHUB_EVENT_NAME\"]=\"$(cfg.github_event_name)\" is \"push\", \"workflow_dispatch\" or \"schedule\"")
         ## deploydocs' devbranch should match the current branch
         m = match(r"^refs\/heads\/(.*)$", cfg.github_ref)
         branch_ok = m === nothing ? false : String(m.captures[1]) == devbranch
@@ -408,11 +419,13 @@ function deploy_folder(cfg::GitHubActions;
         """
     end
     if all_ok
-        return DeployDecision(; all_ok = true,
-                                branch = deploy_branch,
-                                is_preview = is_preview,
-                                repo = deploy_repo,
-                                subfolder = subfolder)
+        return DeployDecision(;
+            all_ok = true,
+            branch = deploy_branch,
+            is_preview = is_preview,
+            repo = deploy_repo,
+            subfolder = subfolder
+        )
     else
         return DeployDecision(; all_ok = false)
     end
@@ -423,7 +436,9 @@ function authenticated_repo_url(cfg::GitHubActions)
     return "https://$(ENV["GITHUB_ACTOR"]):$(ENV["GITHUB_TOKEN"])@github.com/$(cfg.github_repository).git"
 end
 
-function version_tag_strip_build(tag)
+function version_tag_strip_build(tag; tag_prefix = "")
+    startswith(tag, tag_prefix) || return nothing
+    tag = replace(tag, tag_prefix => ""; count = 1)
     m = match(Base.VERSION_REGEX, tag)
     m === nothing && return nothing
     s0 = startswith(tag, 'v') ? "v" : ""
@@ -432,10 +447,10 @@ function version_tag_strip_build(tag)
     s3 = m[3] === nothing ? "" : ".$(m[3])" # patch
     s4 = m[5] === nothing ? "" : m[5] # pre-release (starting with -)
     # m[7] is the build, which we want to discard
-    "$s0$s1$s2$s3$s4"
+    return "$s0$s1$s2$s3$s4"
 end
 
-function post_status(::GitHubActions; type, repo::String, subfolder=nothing, kwargs...)
+function post_status(::GitHubActions; type, repo::String, subfolder = nothing, kwargs...)
     try # make this non-fatal and silent
         # If we got this far it usually means everything is in
         # order so no need to check everything again.
@@ -447,9 +462,9 @@ function post_status(::GitHubActions; type, repo::String, subfolder=nothing, kwa
             event_path === nothing && return
             event = JSON.parsefile(event_path)
             if haskey(event, "pull_request") &&
-               haskey(event["pull_request"], "head") &&
-               haskey(event["pull_request"]["head"], "sha")
-               sha = event["pull_request"]["head"]["sha"]
+                    haskey(event["pull_request"], "head") &&
+                    haskey(event["pull_request"]["head"], "sha")
+                sha = event["pull_request"]["head"]["sha"]
             end
         elseif get(ENV, "GITHUB_EVENT_NAME", nothing) == "push"
             sha = get(ENV, "GITHUB_SHA", nothing)
@@ -461,7 +476,7 @@ function post_status(::GitHubActions; type, repo::String, subfolder=nothing, kwa
     end
 end
 
-function post_github_status(type::S, deploydocs_repo::S, sha::S, subfolder=nothing) where S <: String
+function post_github_status(type::S, deploydocs_repo::S, sha::S, subfolder = nothing) where {S <: String}
     try
         Sys.which("curl") === nothing && return
         ## Extract owner and repository name
@@ -478,7 +493,7 @@ function post_github_status(type::S, deploydocs_repo::S, sha::S, subfolder=nothi
         push!(cmd.exec, "-H", "Authorization: token $(auth)")
         push!(cmd.exec, "-H", "User-Agent: Documenter.jl")
         push!(cmd.exec, "-H", "Content-Type: application/json")
-        json = Dict{String,Any}("context" => "documenter/deploy", "state"=>type)
+        json = Dict{String, Any}("context" => "documenter/deploy", "state" => type)
         if type == "pending"
             json["description"] = "Documentation build in progress"
         elseif type == "success"
@@ -499,8 +514,8 @@ function post_github_status(type::S, deploydocs_repo::S, sha::S, subfolder=nothi
         push!(cmd.exec, "https://api.github.com/repos/$(owner)/$(repo)/statuses/$(sha)")
         # Run the command (silently)
         io = IOBuffer()
-        res = run(pipeline(cmd; stdout=io, stderr=devnull))
-        @debug "Response of curl POST request" response=String(take!(io))
+        res = run(pipeline(cmd; stdout = io, stderr = devnull))
+        @debug "Response of curl POST request" response = String(take!(io))
     catch
         @debug "Failed to post status"
     end
@@ -508,44 +523,35 @@ function post_github_status(type::S, deploydocs_repo::S, sha::S, subfolder=nothi
 end
 
 function verify_github_pull_repository(repo, prnr)
+    github_token = get(ENV, "GITHUB_TOKEN", nothing)
+    if github_token === nothing
+        @warn "GITHUB_TOKEN is missing, unable to verify if PR comes from destination repository -- assuming it doesn't."
+        return false
+    end
+    # Construct the curl call
+    cmd = `curl -s`
+    push!(cmd.exec, "-H", "Authorization: token $(github_token)")
+    push!(cmd.exec, "-H", "User-Agent: Documenter.jl")
+    push!(cmd.exec, "--fail")
+    push!(cmd.exec, "https://api.github.com/repos/$(repo)/pulls/$(prnr)")
     try
-        github_token = get(ENV, "GITHUB_TOKEN", nothing)
-        github_token === nothing && error("GITHUB_TOKEN missing")
-        # Construct the curl call
-        cmd = `curl -s`
-        push!(cmd.exec, "-S", "GET")
-        push!(cmd.exec, "-H", "Authorization: token $(github_token)")
-        push!(cmd.exec, "-H", "User-Agent: Documenter.jl")
-        push!(cmd.exec, "-H", "Content-Type: application/json")
-        push!(cmd.exec, "--fail")
-        push!(cmd.exec, "https://api.github.com/repos/$(repo)/pulls/$(prnr)")
         # Run the command (silently)
         response = run_and_capture(cmd)
         response = JSON.parse(response.stdout)
         pr_head_repo = response["head"]["repo"]["full_name"]
         @debug "pr_head_repo = '$pr_head_repo' vs repo = '$repo'"
-        return (pr_head_repo == repo)
+        return pr_head_repo == repo
     catch e
-        @warn "Unable to verify if PR comes from destination repository -- assuming it does."
+        @warn "Unable to verify if PR comes from destination repository -- assuming it doesn't."
         @debug "Running CURL led to an exception:" exception = (e, catch_backtrace())
-        return true
+        return false
     end
 end
 
 function run_and_capture(cmd)
-    stdout, stderr = if VERSION < v"1.1"
-        # On Julia 1.0, we can not pass IOBuffer() to pipeline(), so we're using the workaround
-        # described here:
-        # https://discourse.julialang.org/t/how-to-capture-stdout-and-stderr-in-1-1/20712/2
-        stdout_pipe, stderr_pipe = Pipe(), Pipe()
-        run(pipeline(cmd; stdout = stdout_pipe, stderr = stderr_pipe))
-        close(stdout_pipe.in); close(stderr_pipe.in)
-        stdout, stderr = read(stdout_pipe, String), read(stderr_pipe, String)
-    else
-        stdout_buffer, stderr_buffer = IOBuffer(), IOBuffer()
-        run(pipeline(cmd; stdout = stdout_buffer, stderr = stderr_buffer))
-        stdout, stderr = String(take!(stdout_buffer)), String(take!(stderr_buffer))
-    end
+    stdout_buffer, stderr_buffer = IOBuffer(), IOBuffer()
+    run(pipeline(cmd; stdout = stdout_buffer, stderr = stderr_buffer))
+    stdout, stderr = String(take!(stdout_buffer)), String(take!(stderr_buffer))
     return (; stdout = stdout, stderr = stderr)
 end
 
@@ -595,20 +601,21 @@ function GitLab()
     repo_slug = get(ENV, "CI_PROJECT_PATH_SLUG", "")
     commit_tag = get(ENV, "CI_COMMIT_TAG", "")
     pipeline_source = get(ENV, "CI_PIPELINE_SOURCE", "")
-    GitLab(commit_branch, pull_request_iid, repo_slug, commit_tag, pipeline_source)
+    return GitLab(commit_branch, pull_request_iid, repo_slug, commit_tag, pipeline_source)
 end
 
 function deploy_folder(
-    cfg::GitLab;
-    repo,
-    repo_previews = repo,
-    devbranch,
-    push_preview,
-    devurl,
-    branch = "gh-pages",
-    branch_previews = branch,
-    kwargs...,
-)
+        cfg::GitLab;
+        repo,
+        repo_previews = repo,
+        devbranch,
+        push_preview,
+        devurl,
+        branch = "gh-pages",
+        branch_previews = branch,
+        tag_prefix = "",
+        kwargs...,
+    )
     io = IOBuffer()
     all_ok = true
 
@@ -630,7 +637,7 @@ function deploy_folder(
     println(io, "Detected build type: ", build_type)
 
     if build_type == :release
-        tag_nobuild = version_tag_strip_build(cfg.commit_tag)
+        tag_nobuild = version_tag_strip_build(cfg.commit_tag; tag_prefix)
         ## If a tag exist it should be a valid VersionNumber
         tag_ok = tag_nobuild !== nothing
 
@@ -737,20 +744,21 @@ function Buildkite()
     commit_branch = get(ENV, "BUILDKITE_BRANCH", "")
     pull_request = get(ENV, "BUILDKITE_PULL_REQUEST", "false")
     commit_tag = get(ENV, "BUILDKITE_TAG", "")
-    Buildkite(commit_branch, pull_request, commit_tag)
+    return Buildkite(commit_branch, pull_request, commit_tag)
 end
 
 function deploy_folder(
-    cfg::Buildkite;
-    repo,
-    repo_previews = repo,
-    devbranch,
-    push_preview,
-    devurl,
-    branch = "gh-pages",
-    branch_previews = branch,
-    kwargs...,
-)
+        cfg::Buildkite;
+        repo,
+        repo_previews = repo,
+        devbranch,
+        push_preview,
+        devurl,
+        branch = "gh-pages",
+        branch_previews = branch,
+        tag_prefix = "",
+        kwargs...,
+    )
     io = IOBuffer()
     all_ok = true
 
@@ -770,7 +778,7 @@ function deploy_folder(
     println(io, "Detected build type: ", build_type)
 
     if build_type == :release
-        tag_nobuild = version_tag_strip_build(cfg.commit_tag)
+        tag_nobuild = version_tag_strip_build(cfg.commit_tag; tag_prefix)
         ## If a tag exist it should be a valid VersionNumber
         tag_ok = tag_nobuild !== nothing
 
@@ -853,6 +861,273 @@ authentication_method(::Buildkite) = Documenter.SSH
 
 documenter_key(::Buildkite) = ENV["DOCUMENTER_KEY"]
 
+#################
+# Woodpecker CI #
+#################
+"""
+    Woodpecker <: DeployConfig
+
+Implementation of `DeployConfig` for deploying from Woodpecker CI.
+
+## Woodpecker 1.0.0 and onwards
+
+The following environmental variables are built-in from the Woodpecker pipeline
+influences how `Documenter` works.
+
+ - `CI_REPO`: must match the full name of the repository <owner>/<name> e.g. `JuliaDocs/Documenter.jl`
+ - `CI_PIPELINE_EVENT`: must be set to `push`, `tag`, `pull_request`, and `deployment`
+ - `CI_COMMIT_REF`: must match the `devbranch` keyword to [`deploydocs`](@ref), alternatively correspond to a git tag.
+ - `CI_COMMIT_TAG`: must match to a tag.
+ - `CI_COMMIT_PULL_REQUEST`: must return the PR number.
+ - `CI_FORGE_URL`: env var to build the url to be used for authentication.
+
+## Woodpecker 0.15.x and pre-1.0.0
+
+The following environmental variables are built-in from the Woodpecker pipeline
+influences how `Documenter` works:
+ - `CI_REPO`: must match the full name of the repository <owner>/<name> e.g. `JuliaDocs/Documenter.jl`
+ - `CI_REPO_LINK`: must match the full link to the project repo
+ - `CI_BUILD_EVENT`: must be set to `push`, `tag`, `pull_request`, and `deployment`
+ - `CI_COMMIT_REF`: must match the `devbranch` keyword to [`deploydocs`](@ref), alternatively correspond to a git tag.
+ - `CI_COMMIT_TAG`: must match to a tag.
+ - `CI_COMMIT_PULL_REQUEST`: must return the PR number.
+## Documenter Specific Environmental Variables
+
+ - `DOCUMENTER_KEY`: must contain the Base64-encoded SSH private key for the
+   repository. This variable should be somehow set in the CI environment, e.g.,
+   provisioned by an agent environment plugin.
+
+Lastly, another environment-variable used for authentication is
+the `PROJECT_ACCESS_TOKEN` which is an access token you defined by 
+the forge you use e.g. GitHub, GitLab, Codeberg, and other gitea 
+instances. Check their documentation on how to create an access token. 
+This access token should be then added as a secret as documented in 
+<https://woodpecker-ci.org/docs/usage/secrets>.
+
+# Example Pipeline Syntax 
+
+## 1.0.0 and onwards
+
+```yaml
+labels:
+  platform: linux/amd64
+
+steps:
+  docs:
+    when:
+      branch:
+        - main
+    image: opensuse/tumbleweed
+    commands:
+      - zypper --non-interactive install openssh juliaup git
+      - /usr/bin/julia --project=docs/ --startup-file=no --history-file=no -e "import Pkg; Pkg.instantiate()"
+      - /usr/bin/julia --project=docs/ --startup-file=no --history-file=no -e docs/make.jl
+    secrets: [ documenter_key, project_access_token ]
+```
+
+## 0.15.x and pre-1.0.0
+
+```yaml
+platforms: linux/amd64
+
+pipeline:
+  docs:
+    when:
+      branch:
+        - main
+    image: opensuse/tumbleweed
+    commands:
+      - zypper --non-interactive install openssh juliaup git
+      - /usr/bin/julia --project=docs/ --startup-file=no --history-file=no -e "import Pkg; Pkg.instantiate()"
+      - /usr/bin/julia --project=docs/ --startup-file=no --history-file=no -e docs/make.jl
+    secrets: [ documenter_key, project_access_token ]
+```
+
+More about pipeline syntax is documented here: 
+- 0.15.x: [https://woodpecker-ci.org/docs/0.15/usage/pipeline-syntax (hosted at archive.org; the documentation is no longer available on the Woodpecker website)](https://web.archive.org/web/20240318223506/https://woodpecker-ci.org/docs/0.15/usage/pipeline-syntax)
+- 1.0.0 and onwards: <https://woodpecker-ci.org/docs/1.0/usage/pipeline-syntax>
+- 2.0.0: <https://woodpecker-ci.org/docs/usage/workflow-syntax>
+"""
+struct Woodpecker <: DeployConfig
+    woodpecker_ci_version::VersionNumber
+    woodpecker_forge_url::String
+    woodpecker_repo::String
+    woodpecker_tag::String
+    woodpecker_event_name::String
+    woodpecker_ref::String
+end
+
+"""
+    Woodpecker()
+
+Initialize woodpecker environment-variables. Further info of
+environment-variables used are in <https://woodpecker-ci.org/docs/usage/environment>
+"""
+function Woodpecker()
+    m = match(r"(next)?-*", ENV["CI_SYSTEM_VERSION"])
+    if !isnothing(m.captures[1])
+        @warn """You are currently using an unreleased version of Woodpecker
+        CI. Creating dummy version to temporarily resolve the issue."""
+        woodpecker_ci_version = v"1000"
+    else
+        woodpecker_ci_version = VersionNumber(ENV["CI_SYSTEM_VERSION"])
+        @warn "Current Woodpecker version is $(woodpecker_ci_version). Make sure this is correct."
+        if ENV["CI"] == "drone" && (v"1.0.0" > VersionNumber(ENV["CI_SYSTEM_VERSION"]) >= v"0.15.0")
+            @warn """Woodpecker prior version 1.0.0 is backward compatible to Drone
+            but *there will be breaking changes in the future*. Please update
+            to a newer version """
+        end
+    end
+
+    # Woodpecker skipped 0.16.x and went to 1.0.0 and onwards
+    # Woodpecker integration on Documenter.jl started with Woodpecker 0.15.0
+    if v"1.0.0" > woodpecker_ci_version >= v"0.15.0"
+        woodpecker_repo_link = get(ENV, "CI_REPO_LINK", "")
+        m = match(r"(https?:\/\/?:.+\.)*(.+\..+?)\/", woodpecker_repo_link)
+        woodpecker_forge_url = !isnothing(m) ? m.captures[2] : ""
+        woodpecker_tag = get(ENV, "CI_COMMIT_TAG", "")
+        woodpecker_repo = get(ENV, "CI_REPO", "")
+        woodpecker_event_name = get(ENV, "CI_BUILD_EVENT", "")
+        woodpecker_ref = get(ENV, "CI_COMMIT_REF", "")
+        return Woodpecker(woodpecker_ci_version, woodpecker_forge_url, woodpecker_repo, woodpecker_tag, woodpecker_event_name, woodpecker_ref)
+    else
+        woodpecker_forge_url = get(ENV, "CI_FORGE_URL", "")
+        woodpecker_tag = get(ENV, "CI_COMMIT_TAG", "")
+        woodpecker_repo = get(ENV, "CI_REPO", "")  # repository full name <owner>/<name>
+        woodpecker_event_name = get(ENV, "CI_PIPELINE_EVENT", "")  # build event (push, pull_request, tag, deployment)
+        woodpecker_ref = get(ENV, "CI_COMMIT_REF", "")  # commit ref
+        return Woodpecker(woodpecker_ci_version, woodpecker_forge_url, woodpecker_repo, woodpecker_tag, woodpecker_event_name, woodpecker_ref)
+    end
+end
+
+function deploy_folder(
+        cfg::Woodpecker;
+        repo,
+        repo_previews = repo,
+        branch = "pages",
+        branch_previews = branch,
+        devbranch,
+        push_preview,
+        devurl,
+        tag_prefix = "",
+        kwargs...
+    )
+    io = IOBuffer()
+    all_ok = true
+    if cfg.woodpecker_event_name == "pull_request"
+        build_type = :preview
+    elseif occursin(r"^refs\/tags\/(.*)$", cfg.woodpecker_ref)
+        build_type = :release
+    else
+        build_type = :devbranch
+    end
+
+    println(io, "Deployment criteria for deploying $(build_type) build from Woodpecker-CI")
+    ## The deploydocs' repo should match CI_REPO
+
+    forge_url_ok = !isempty(cfg.woodpecker_forge_url)  # if the forge url is an empty string, it is not a valid url
+    all_ok &= forge_url_ok
+
+    repo_ok = occursin(cfg.woodpecker_repo, repo)
+    all_ok &= repo_ok
+    println(io, "- $(marker(repo_ok)) ENV[\"CI_REPO\"]=\"$(cfg.woodpecker_repo)\" occursin in repo=\"$(repo)\"")
+
+    ci_event_env_name = if haskey(ENV, "CI_PIPELINE_EVENT")
+        "ENV[\"CI_PIPELINE_EVENT\"]"
+    elseif haskey(ENV, "CI_BUILD_EVENT")
+        "ENV[\"CI_BUILD_EVENT\"]"
+    end
+
+    if build_type === :release
+        event_ok = in(cfg.woodpecker_event_name, ["push", "pull_request", "deployment", "tag"])
+        all_ok &= event_ok
+        println(io, "- $(marker(event_ok)) $(ci_event_env_name)=\"$(cfg.woodpecker_event_name)\" is \"push\", \"deployment\" or \"tag\"")
+        tag_nobuild = version_tag_strip_build(cfg.woodpecker_tag; tag_prefix)
+        tag_ok = tag_nobuild !== nothing
+        all_ok &= tag_ok
+        println(io, "- $(marker(tag_ok)) ENV[\"CI_COMMIT_TAG\"]=\"$(cfg.woodpecker_tag)\" contains a valid VersionNumber")
+        deploy_branch = branch
+        deploy_repo = repo
+        is_preview = false
+        ## Deploy to folder according to the tag
+        subfolder = tag_nobuild
+    elseif build_type === :devbranch
+        ## Do not deploy for PRs
+        event_ok = in(cfg.woodpecker_event_name, ["push", "pull_request", "deployment", "tag"])
+        all_ok &= event_ok
+        println(io, "- $(marker(event_ok)) $(ci_event_env_name)=\"$(cfg.woodpecker_event_name)\" is \"push\", \"deployment\", or \"tag\"")
+        ## deploydocs' devbranch should match the current branch
+        m = match(r"^refs\/heads\/(.*)$", cfg.woodpecker_ref)
+        branch_ok = (m === nothing) ? false : String(m.captures[1]) == devbranch
+        all_ok &= branch_ok
+        println(io, "- $(marker(branch_ok)) ENV[\"CI_COMMIT_REF\"] matches devbranch=\"$(devbranch)\"")
+        deploy_branch = branch
+        deploy_repo = repo
+        is_preview = false
+        ## Deploy to deploydocs devurl kwarg
+        subfolder = devurl
+    else # build_type === :preview
+        m = match(r"refs\/pull\/(\d+)\/merge", cfg.woodpecker_ref)
+        pr_number1 = tryparse(Int, (m === nothing) ? "" : m.captures[1])
+        pr_number2 = tryparse(Int, get(ENV, "CI_COMMIT_PULL_REQUEST", nothing) === nothing ? "" : ENV["CI_COMMIT_PULL_REQUEST"])
+        # Check if both are Ints. If both are Ints, then check if they are equal, otherwise, return false
+        pr_numbers_ok = all(x -> x isa Int, [pr_number1, pr_number2]) ? (pr_number1 == pr_number2) : false
+        is_pull_request_ok = cfg.woodpecker_event_name == "pull_request"
+        pr_ok = pr_numbers_ok == is_pull_request_ok
+        all_ok &= pr_ok
+        println(io, "- $(marker(pr_numbers_ok)) ENV[\"CI_COMMIT_REF\"] corresponds to a PR")
+        println(io, "- $(marker(is_pull_request_ok)) $(ci_event_env_name) matches built type: `pull_request`")
+        btype_ok = push_preview
+        all_ok &= btype_ok
+        println(io, "- $(marker(btype_ok)) `push_preview` keyword argument to deploydocs is `true`")
+        deploy_branch = branch_previews
+        deploy_repo = repo_previews
+        is_preview = true
+        ## deploydocs to previews/PR
+        subfolder = "previews/PR$(something(pr_number1, 0))"
+    end
+
+    token_ok = env_nonempty("PROJECT_ACCESS_TOKEN")
+    key_ok = env_nonempty("DOCUMENTER_KEY")
+    auth_ok = token_ok | key_ok
+    all_ok &= auth_ok
+
+    if key_ok
+        println(io, "- $(marker(key_ok)) ENV[\"DOCUMENTER_KEY\"] exists and is non-empty")
+    elseif token_ok
+        println(io, "- $(marker(token_ok)) ENV[\"PROJECT_ACCESS_TOKEN\"] exists and is non-empty")
+    else
+        println(io, "- $(marker(auth_ok)) ENV[\"DOCUMENTER_KEY\"] or ENV[\"PROJECT_ACCESS_TOKEN\"] exists and is non-empty")
+    end
+
+    print(io, "Deploying: $(marker(all_ok))")
+    @info String(take!(io))
+    if build_type === :devbranch && !branch_ok && devbranch == "master" && cfg.woodpecker_ref == "refs/heads/main"
+        @warn """
+        Possible deploydocs() misconfiguration: main vs master. Current branch (from \$CI_COMMIT_REF) is "main".
+        """
+    end
+
+    if all_ok
+        return DeployDecision(;
+            all_ok = true,
+            branch = deploy_branch,
+            is_preview = is_preview,
+            repo = deploy_repo,
+            subfolder = subfolder
+        )
+    else
+        return DeployDecision(; all_ok = false)
+    end
+end
+
+authentication_method(::Woodpecker) = env_nonempty("DOCUMENTER_KEY") ? SSH : HTTPS
+function authenticated_repo_url(cfg::Woodpecker)
+    # https://codeberg.org -> codeberg.org
+    forge_domain = split(cfg.woodpecker_forge_url, r"https?://")[2]
+    return "https://$(ENV["PROJECT_ACCESS_TOKEN"])@$(forge_domain)/$(cfg.woodpecker_repo).git"
+end
+
 ##################
 # Auto-detection #
 ##################
@@ -865,6 +1140,8 @@ function auto_detect_deploy_system()
         return GitLab()
     elseif haskey(ENV, "BUILDKITE")
         return Buildkite()
+    elseif get(ENV, "CI", "") in ["woodpecker", "drone"]
+        return Woodpecker()
     else
         return nothing
     end

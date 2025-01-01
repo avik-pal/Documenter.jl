@@ -14,8 +14,7 @@ module — a special variable is created in each module that has documentation m
 * `DocTestSetup`: contains the doctest setup code for doctests in the module.
 """
 module DocMeta
-using ..Documenter: Utilities
-using DocStringExtensions
+import ..Documenter
 
 "The unique `Symbol` that is used to store the metadata dictionary in each module."
 const META = gensym(:docmeta)
@@ -24,10 +23,10 @@ const META = gensym(:docmeta)
 const METAMODULES = Module[]
 
 "Type of the metadata dictionary."
-const METATYPE = Dict{Symbol,Any}
+const METATYPE = Dict{Symbol, Any}
 
 "Dictionary of all valid metadata keys and their types."
-const VALIDMETA = Dict{Symbol,Type}(:DocTestSetup => Union{Expr,Symbol})
+const VALIDMETA = Dict{Symbol, Type}(:DocTestSetup => Union{Expr, Symbol})
 
 """
 """
@@ -57,7 +56,7 @@ getdocmeta(m::Module) = isdefined(m, META) ? getfield(m, META) : METATYPE()
 Return the `key` entry from the documentation metadata for module `m`, or `default` if the
 value is unset.
 """
-getdocmeta(m::Module, key::Symbol, default=nothing) = get(getdocmeta(m), key, default)
+getdocmeta(m::Module, key::Symbol, default = nothing) = get(getdocmeta(m), key, default)
 
 """
     setdocmeta!(m::Module, key::Symbol, value; recursive=false, warn=true)
@@ -65,14 +64,14 @@ getdocmeta(m::Module, key::Symbol, default=nothing) = get(getdocmeta(m), key, de
 Set the documentation metadata value `key` for module `m` to `value`.
 
 If `recursive` is set to `true`, it sets the same metadata value for all the submodules too.
-If `warn` is `true`, it prints a warning when `key` already exists and is gets rewritten.
+If `warn` is `true`, it prints a warning when `key` already exists and it gets rewritten.
 """
-function setdocmeta!(m::Module, key::Symbol, value; warn=true, recursive=false)
+function setdocmeta!(m::Module, key::Symbol, value; warn = true, recursive = false)
     key in keys(VALIDMETA) || throw(ArgumentError("Invalid metadata key\nValid keys are: $(join(keys(VALIDMETA), ", "))"))
     isa(value, VALIDMETA[key]) || throw(ArgumentError("Bad value type ($(typeof(value))) for metadata key $(key). Must be <: $(VALIDMETA[key])"))
     if recursive
-        for mod in Utilities.submodules(m)
-            setdocmeta!(mod, key, value; warn=warn, recursive=false)
+        for mod in Documenter.submodules(m)
+            setdocmeta!(mod, key, value; warn = warn, recursive = false)
         end
     else
         isdefined(m, META) || initdocmeta!(m)

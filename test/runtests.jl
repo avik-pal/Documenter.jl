@@ -1,6 +1,16 @@
 using Test
 import Documenter
-include("TestUtilities.jl"); using .TestUtilities
+include("TestUtilities.jl"); using Main.TestUtilities
+
+function testset_include(filename; quietly = false)
+    return @testset "$filename" begin
+        if quietly
+            @quietly include(filename)
+        else
+            include(filename)
+        end
+    end
+end
 
 @testset "Documenter" begin
     # Build the example docs
@@ -9,28 +19,39 @@ include("TestUtilities.jl"); using .TestUtilities
 
     # Test missing docs
     @info "Building missingdocs/make.jl"
-    @quietly include("missingdocs/make.jl")
+    include("missingdocs/make.jl")
+
+    # Test @ref fallback to Main for fully qualified names
+    @info "Building docsxref/make.jl"
+    include("docsxref/make.jl")
 
     # Error reporting.
     @info "Building errors/make.jl"
     @quietly include("errors/make.jl")
 
+    # Plugin API
+    @info "Building plugins/make.jl"
+    @quietly include("plugins/make.jl")
+
     # Unit tests for module internals.
+    include("except.jl")
     include("utilities.jl")
-    include("markdown2.jl")
+
+    # Remote repository link handling
+    include("remotes.jl")
+    testset_include("repolinks.jl")
 
     # DocChecks tests
-    if haskey(ENV, "DOCUMENTER_TEST_LINKCHECK")
-        include("docchecks.jl")
-    else
-        @info "DOCUMENTER_TEST_LINKCHECK not set, skipping online linkcheck tests."
-    end
+    include("docchecks.jl")
 
     # NavNode tests.
     include("navnode.jl")
 
     # DocSystem unit tests.
     include("docsystem.jl")
+
+    # CrossReferences
+    include("crossreferences.jl")
 
     # DocTest unit tests.
     @info "Running tests in doctests/"
@@ -56,13 +77,10 @@ include("TestUtilities.jl"); using .TestUtilities
 
     # Deployment configurations
     include("deployconfig.jl")
+    include("deploydocs.jl")
 
     # Mock package docs.
     include("examples/tests.jl")
-
-    # Documenter package docs with other formats.
-    @info "Building formats/markdown.jl"
-    @quietly include("formats/markdown.jl")
 
     # A simple build outside of a Git repository
     @info "Building nongit/tests.jl"
@@ -73,7 +91,7 @@ include("TestUtilities.jl"); using .TestUtilities
     @quietly include("workdir/tests.jl")
 
     # Passing a writer positionally (https://github.com/JuliaDocs/Documenter.jl/issues/1046)
-    @test_throws ArgumentError makedocs(sitename="", HTML())
+    @test_throws MethodError makedocs(sitename = "", HTML())
 
     # Running doctest() on our own manual
     @info "doctest() Documenter's manual"

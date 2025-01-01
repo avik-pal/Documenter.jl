@@ -1,5 +1,9 @@
+```@meta
+CollapsedDocStrings = true
+```
+
 # JSDependencies
 
 ```@autodocs
-Modules = [Documenter.Utilities.JSDependencies]
+Modules = [Documenter.JSDependencies]
 ```

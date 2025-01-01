@@ -5,7 +5,7 @@
 
 | **Documentation**                                                               | **Build Status**                                                                                |
 |:-------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------:|
-| [![][docs-stable-img]][docs-stable-url] [![][docs-dev-img]][docs-dev-url] | [![][travis-img]][travis-url] [![][appveyor-img]][appveyor-url] [![][codecov-img]][codecov-url] |
+| [![][docs-stable-img]][docs-stable-url] [![][docs-dev-img]][docs-dev-url] | [![][GHA-img]][GHA-url] [![][codecov-img]][codecov-url] [![PkgEval][pkgeval-img]][pkgeval-url] |
 
 
 ## Installation
@@ -30,7 +30,7 @@ julia> import Pkg; Pkg.add("Documenter")
 
 ## Project Status
 
-The package is tested against, and being developed for, Julia `1.0` and above on Linux, macOS, and Windows.
+The package is tested against, and being developed for, Julia `1.6` and above on Linux, macOS, and Windows.
 
 ## Questions and Contributions
 
@@ -42,15 +42,19 @@ Contributions are very welcome, as are feature requests and suggestions. Please 
 
 There are several packages that extend Documenter in different ways. The JuliaDocs organization maintains:
 
-* [DocumenterTools.jl](https://github.com/JuliaDocs/DocumenterTools.jl)
+* [DocumenterCitations.jl](https://github.com/JuliaDocs/DocumenterCitations.jl)
+* [DocumenterInterLinks.jl](https://github.com/JuliaDocs/DocumenterInterLinks.jl)
 * [DocumenterMarkdown.jl](https://github.com/JuliaDocs/DocumenterMarkdown.jl)
+* [DocumenterTools.jl](https://github.com/JuliaDocs/DocumenterTools.jl)
+* [LiveServer.jl](https://github.com/JuliaDocs/LiveServer.jl)
 
 Other third-party packages that can be combined with Documenter include:
 
-* [DemoCards.jl](https://github.com/johnnychen94/DemoCards.jl)
-* [DocumenterCitations.jl](https://github.com/ali-ramadhan/DocumenterCitations.jl)
+* [DemoCards.jl](https://github.com/JuliaDocs/DemoCards.jl)
 * [Literate.jl](https://github.com/fredrikekre/Literate.jl)
-* [LiveServer.jl](https://github.com/tlienart/LiveServer.jl)
+* [QuizQuestions.jl](https://github.com/jverzani/QuizQuestions.jl)
+* [DocumenterMermaid.jl](https://github.com/JuliaDocs/DocumenterMermaid.jl)
+* [DocumenterDiagrams.jl](https://github.com/pedromxavier/DocumenterDiagrams.jl)
 
 Finally, there are also a few other packages in the Julia ecosystem that are similar to Documenter, but fill a slightly different niche:
 
@@ -58,23 +62,23 @@ Finally, there are also a few other packages in the Julia ecosystem that are sim
 * [Publish.jl](https://github.com/MichaelHatherly/Publish.jl)
 * [Weave.jl](https://github.com/JunoLab/Weave.jl)
 
-[contrib-url]: https://juliadocs.github.io/Documenter.jl/dev/contributing/
+[contrib-url]: https://documenter.juliadocs.org/dev/contributing/
 [discourse-tag-url]: https://discourse.julialang.org/tags/documenter
 [gitter-url]: https://gitter.im/juliadocs/users
 
 [docs-dev-img]: https://img.shields.io/badge/docs-dev-blue.svg
-[docs-dev-url]: https://juliadocs.github.io/Documenter.jl/dev
+[docs-dev-url]: https://documenter.juliadocs.org/dev
 
 [docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
-[docs-stable-url]: https://juliadocs.github.io/Documenter.jl/stable
+[docs-stable-url]: https://documenter.juliadocs.org/stable
 
-[travis-img]: https://travis-ci.org/JuliaDocs/Documenter.jl.svg?branch=master
-[travis-url]: https://travis-ci.org/JuliaDocs/Documenter.jl
-
-[appveyor-img]: https://ci.appveyor.com/api/projects/status/xx7nimfpnl1r4gx0?svg=true
-[appveyor-url]: https://ci.appveyor.com/project/JuliaDocs/documenter-jl
+[GHA-img]: https://github.com/JuliaDocs/Documenter.jl/workflows/CI/badge.svg
+[GHA-url]: https://github.com/JuliaDocs/Documenter.jl/actions?query=workflows/CI
 
 [codecov-img]: https://codecov.io/gh/JuliaDocs/Documenter.jl/branch/master/graph/badge.svg
 [codecov-url]: https://codecov.io/gh/JuliaDocs/Documenter.jl
 
 [issues-url]: https://github.com/JuliaDocs/Documenter.jl/issues
+
+[pkgeval-img]: https://juliaci.github.io/NanosoldierReports/pkgeval_badges/D/Documenter.svg
+[pkgeval-url]: https://juliaci.github.io/NanosoldierReports/pkgeval_badges/D/Documenter.html

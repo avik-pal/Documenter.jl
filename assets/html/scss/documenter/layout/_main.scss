@@ -51,24 +51,34 @@
       display: flex;
       .breadcrumb {
         flex-grow: 1;
+        overflow-x: hidden;
+      }
+
+      .docs-sidebar-button {
+        display: block;
+        font-size: 1.5rem;
+        // Manually align with the center line of H
+        padding-bottom: 0.1rem;
+        margin-right: 1rem;
       }
 
       .docs-right {
         display: flex;
-        .docs-icon, .docs-label, .docs-sidebar-button {
+        .docs-icon, .docs-label {
           display: inline-block;
         }
         white-space: nowrap;
+        gap: 1rem;
+        align-items: center;
         .docs-label {
           padding: 0;
           margin-left: 0.3em;
         }
-        .docs-settings-button {
-          margin: auto 0 auto 1rem;
-        }
-        .docs-sidebar-button {
-          font-size: 1.5rem;
-          margin: auto 0 auto 1rem;
+        @include touch {
+          .docs-navbar-link {
+            margin-left: 0.4rem;
+            margin-right: 0.4rem;
+          }
         }
       }
 

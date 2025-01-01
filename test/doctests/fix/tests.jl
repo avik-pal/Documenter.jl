@@ -2,23 +2,21 @@
 #
 # DOCUMENTER_TEST_DEBUG= JULIA_DEBUG=all julia test/doctests/fix/tests.jl
 #
-isdefined(@__MODULE__, :TestUtilities) || (include("../../TestUtilities.jl"); using .TestUtilities)
 module DocTestFixTest
 using Documenter, Test
-using ..TestUtilities: @quietly
+include("../../TestUtilities.jl"); using Main.TestUtilities: @quietly
 
 # Type to reliably show() objects across Julia versions:
 @eval Main begin
     struct ShowWrap
-        s :: String
+        s::String
     end
     Base.show(io::IO, x::ShowWrap) = write(io, x.s)
     const DocTestFixArray_1234 = Main.ShowWrap("4×1×1 Array{Int64,3}:\n[:, :, 1] =\n 1\n 2\n 3\n 4")
     const DocTestFixArray_2468 = Main.ShowWrap("4×1×1 Array{Int64,3}:\n[:, :, 1] =\n 2\n 4\n 6\n 8")
 end
 
-# The version check is necessary due to a behaviour change in https://github.com/JuliaLang/julia/pull/32851
-mktempdir_nocleanup(dir) = VERSION >= v"1.3.0-alpha.112" ? mktempdir(dir, cleanup = false) : mktempdir(dir)
+mktempdir_nocleanup(dir) = mktempdir(dir, cleanup = false)
 
 function normalize_line_endings(filename)
     s = read(filename, String)
@@ -40,16 +38,32 @@ function test_doctest_fix(dir)
     # fix up
     include(joinpath(srcdir, "src.jl")); @eval import .Foo
     @debug "Running doctest/fix doctests with doctest=:fix"
-    @quietly makedocs(sitename="-", modules = [Foo], source = srcdir, build = builddir, doctest = :fix)
+    @quietly makedocs(sitename = "-", modules = [Foo], source = srcdir, build = builddir, doctest = :fix)
 
-    # test that strict = true works
+    # check that the doctests are passing now
     include(joinpath(srcdir, "src.jl")); @eval import .Foo
     @debug "Running doctest/fix doctests with doctest=true"
-    @quietly makedocs(sitename="-", modules = [Foo], source = srcdir, build = builddir, strict = true)
+    @quietly makedocs(sitename = "-", modules = [Foo], source = srcdir, build = builddir)
 
-    # also test that we obtain the expected output
-    @test normalize_line_endings(index_md) == normalize_line_endings(joinpath(@__DIR__, "fixed.md"))
-    @test normalize_line_endings(src_jl) == normalize_line_endings(joinpath(@__DIR__, "fixed.jl"))
+    # Load the expected results and adapt to various Julia versions:
+    md_result = normalize_line_endings(joinpath(@__DIR__, "fixed.md"))
+    if VERSION < v"1.11"
+        # 1.11 Starts printing "in `Main`", so we remove that from the expected output.
+        md_result = replace(md_result, r"UndefVarError: `([^`]*)` not defined in `Main`" => s"UndefVarError: `\1` not defined")
+    end
+    if VERSION < v"1.11"
+        # 1.11 started printing the 'Suggestion: check for spelling errors or missing imports.' messages
+        # for UndefVarError, so we remove them from the expected output.
+        md_result = replace(md_result, r"UndefVarError: `([^`]*)` not defined\nSuggestion: .+" => s"UndefVarError: `\1` not defined")
+    end
+    if VERSION < v"1.7"
+        # The UndefVarError prints the backticks around the variable name in 1.7+, so we need to remove them.
+        md_result = replace(md_result, r"UndefVarError: `([^`]*)` not defined" => s"UndefVarError: \1 not defined")
+    end
+
+    # test that we obtain the expected output
+    @test normalize_line_endings(index_md) == md_result
+    return @test normalize_line_endings(src_jl) == normalize_line_endings(joinpath(@__DIR__, "fixed.jl"))
 end
 
 @testset "doctest fixing" begin

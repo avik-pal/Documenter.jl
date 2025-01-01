@@ -67,7 +67,11 @@ julia> a / b
 ```@eval
 import Markdown
 code = string(sprint(Base.banner), "julia>")
-Markdown.Code(code)
+Markdown.MD([Markdown.Code(code)])
+```
+
+```@eval
+rand(20, 20)
 ```
 
 ```jldoctest
@@ -276,7 +280,7 @@ _Note: we can't define the `show` method in the `@example` block due to the worl
 counter in Julia 0.6 (Documenter's `makedocs` is not aware of any of the new method
 definitions happening in `eval`s)._
 
-We can also show SVG images with interactivity via the `text/html` MIME to display output that combines HTML, JS and CSS. Assume the following type and method live in the `InlineHTML` modeul
+We can also show SVG images with interactivity via the `text/html` MIME to display output that combines HTML, JS and CSS. Assume the following type and method live in the `InlineHTML` module
 
 ```julia
 struct HTML
@@ -398,7 +402,7 @@ end
 
 ![Julia circles](julia.svg)
 
-Dowload [`data.csv`](data.csv).
+Download [`data.csv`](data.csv).
 
 
 ## [Links](../index.md) in headers
@@ -546,3 +550,13 @@ LaTeXEquation("\\[\\left[\\begin{array}{rr} x & 2x \\\\ \n y & y \\end{array}\\r
 ```@example showablelatex
 LaTeXEquation("\$\$\\begin{bmatrix} 1 & 2 \\\\ \n 3 & 4 \\end{bmatrix}\$\$")
 ```
+
+Inline-ish `text/latex` bytes:
+
+```@example showablelatex
+LaTeXEquation("\$ x_{1} + x_{2} \$")
+```
+
+## Videos
+
+![](https://dl8.webmfiles.org/big-buck-bunny_trailer.webm)

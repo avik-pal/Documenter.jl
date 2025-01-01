@@ -8,19 +8,29 @@ parse error
 ```
 
 ```@meta
-CurrentModule = NonExistantModule
+CurrentModule = NonExistentModule
+draft = true  # invalid keyword
 ```
 
 ```@autodocs
-Modules = [NonExistantModule]
+Modules = [NonExistentModule]
+pages = []  # invalid keyword
 ```
 
 ```@eval
-NonExistantModule
+NonExistentModule
 ```
 
 ```@docs
 # comment in a @docs block
+```
+
+```@index
+foo = 1
+```
+
+```@contents
+foo = 1
 ```
 
 [`foo(x::Foo)`](@ref) creates an [`UndefVarError`](@ref) when `eval`d

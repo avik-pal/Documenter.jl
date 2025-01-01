@@ -14,6 +14,20 @@ From the Julia REPL, type `]` to enter the Pkg REPL mode and run
 pkg> add Documenter
 ```
 
+For package documentation, the standard approach is to install Documenter into a documentation-specific project stored in the `docs/` subdirectory of your package.
+To do this, navigate to your package's root folder and do
+
+```
+pkg> activate docs/
+
+(docs) pkg> add Documenter
+```
+
+This will create `Project.toml` and `Manifest.toml` files in the `docs/` subdirectory. 
+
+Note that for packages, you also likely need to have your package that you are documenting as a  ["dev dependency"](https://pkgdocs.julialang.org/v1/managing-packages/#developing) of the `docs/` environment.
+
+See also [the Pkg.jl documentation on working with project environments](https://pkgdocs.julialang.org/v1/environments/).
 
 ## Setting up the Folder Structure
 
@@ -71,7 +85,9 @@ makedocs(sitename="My Documentation")
 ```
 
 This assumes you've installed Documenter as discussed in [Installation](@ref) and that your
-`Example.jl` package can be found by Julia.
+`Example.jl` package can be found by Julia. If your package has been added as a dev
+dependency using its local path rather than a remote git repository, you need to add the
+keyword argument `remotes = nothing` to the function `makedocs`.
 
 !!! note
 
@@ -91,7 +107,7 @@ Now add an `index.md` file to the `src/` directory.
 Leave the newly added file empty and then run the following command from the `docs/` directory
 
 ```sh
-$ julia make.jl
+$ julia --project make.jl
 ```
 
 Note that `$` just represents the prompt character. You don't need to type that.
@@ -99,7 +115,7 @@ Note that `$` just represents the prompt character. You don't need to type that.
 If you'd like to see the output from this command in color use
 
 ```sh
-$ julia --color=yes make.jl
+$ julia --color=yes --project make.jl
 ```
 
 When you run that you should see the following output
@@ -122,7 +138,6 @@ look like the following
 build/
 ├── assets
 │   ├── documenter.js
-│   ├── search.js
 │   ├── themes
 │   │   ├── documenter-dark.css
 │   │   └── documenter-light.css
@@ -140,35 +155,38 @@ build/
     into `src/foo/index.html`, instead of simply `src/foo.html`, which is the preferred way
     when creating a set of HTML to be hosted on a web server.
 
-    However, this can be a hindrance when browsing the documentation locally as browsers do
-    not resolve directory URLs like `foo/` to `foo/index.html` for local files. You have two
-    options:
+    However, this can be a hindrance when browsing the documentation locally as browsers
+    do not resolve directory URLs like `foo/` to `foo/index.html` for local files. To view
+    the documentation locally, it is recommended that you run a local web server out of
+    the `docs/build` directory. One way to accomplish this is to install the
+    [LiveServer](https://github.com/JuliaDocs/LiveServer.jl) Julia package. You can then
+    start the server with `julia -e 'using LiveServer; serve(dir="docs/build")'`.
+    Alternatively, if you have Python installed, you can start one with
+    `python3 -m http.server --bind localhost`.
 
-    1. You can run a local web server out of the `docs/build` directory. One way to accomplish
-       this is to install the [LiveServer](https://github.com/tlienart/LiveServer.jl) Julia
-       package. You can then start the server with
-       `julia -e 'using LiveServer; serve(dir="docs/build")'`. Alternatively, if you have Python
-       installed, you can start one with `python3 -m http.server --bind localhost`
-       (or `python -m SimpleHTTPServer` with Python 2).
 
-    2. You can disable the pretty URLs feature by passing `prettyurls = false` with the
-       [`Documenter.HTML`](@ref) plugin:
+!!! warning
 
-       ```julia
-       makedocs(..., format = Documenter.HTML(prettyurls = false))
-       ```
+    You may see setups using
 
-       Alternatively, if your goal is to eventually set up automatic documentation deployment
-       with e.g. Travis CI or GitHub Actions (see [Hosting Documentation](@ref)), you can also use their environment
-       variables to determine Documenter's behavior in `make.jl` on the fly:
+    ```julia
+    makedocs(...,
+        format = Documenter.HTML(
+            prettyurls = get(ENV, "CI", nothing) == "true"
+        )
+    )
+    ```
 
-       ```julia
-       makedocs(...,
-           format = Documenter.HTML(
-               prettyurls = get(ENV, "CI", nothing) == "true"
-           )
-       )
-       ```
+    The intent behind this is to use `prettyurls=false` when building the documentation
+    locally, for easy browsing, and `prettyurls=true` when deploying the documentation
+    online from GitHub Actions.
+
+    However, this is not recommended. For example, if a
+    [`@raw` block](@ref @raw-format-block) references a local image, the correct relative
+    path of that image would depend on the `prettyurls` setting ([#921](@ref)). Consequently, the
+    documentation might build correctly locally and be broken on Github Actions, or vice
+    versa. It is recommended to always use `prettyurls=true` and run a local web server
+    to view the documentation.
 
 !!! warning
 
@@ -198,7 +216,7 @@ export func
 """
     func(x)
 
-Returns double the number `x` plus `1`.
+Return double the number `x` plus `1`.
 """
 func(x) = 2x + 1
 
@@ -305,6 +323,36 @@ This also works across different pages in the same way. Note that these sections
 docstrings must be unique within a document.
 
 
+## External Cross-References
+
+Any project building its documentation with the most recent release of Documenter will
+generate an [`objects.inv` inventory](https://juliadocs.org/DocInventories.jl/stable/formats/#Sphinx-Inventory-Format)
+that can be found in the root of the [deployed documentation](@ref Hosting-Documentation).
+The [`DocumenterInterLinks` plugin](https://github.com/JuliaDocs/DocumenterInterLinks.jl#readme)
+allows to define a mapping in your `make.jl` file between an external project name
+and its inventory file, e.g.,
+
+```julia
+using DocumenterInterLinks
+
+links = InterLinks(
+    "Documenter" => "https://documenter.juliadocs.org/stable/objects.inv"
+)
+```
+
+That `InterLinks` object should then be passed to [`makedocs`](@ref) as an element of
+`plugins`. This enables the ability to cross-reference into the external documentation,
+e.g.,  of the `Documenter` package, using an [`@extref` link](@ref) with a syntax similar
+to the above [`@ref`](@ref Cross-Referencing), e.g.,
+
+```markdown
+See the [`Documenter.makedocs`](@extref) function.
+```
+
+See the [documentation of the `DocumenterInterLinks` package](http://juliadocs.org/DocumenterInterLinks.jl/stable/)
+for more details.
+
+
 ## Navigation
 
 Documenter can auto-generate tables of contents and docstring indexes for your document with
@@ -378,7 +426,7 @@ During the build process, Documenter looks for suitable
 graphic images in the `src/assets/` directory and
 automatically copies them to `/build/assets/`.
 
-You can use SVG, PNG, WEBP, GIF, or JPEG images. 
+You can use SVG, PNG, WEBP, GIF, or JPEG images.
 
 Documenter looks for files `logo.svg`, `logo.png`,
 `logo.webp`, `logo.gif`, `logo.jpg`, or `logo.jpeg`, in that
@@ -391,7 +439,7 @@ called `logo-dark.svg` (or PNG/WEBP/GIF/JPEG).
 Files don't need to be square. Images with transparent
 backgrounds can look better, particularly for dark themes.
 
-There's a `sidebar_sitename` keyword option for 
+There's a `sidebar_sitename` keyword option for
 [`Documenter.HTML`](@ref) that lets you hide the sitename
 that's usually displayed below a logo. This is useful if the
 logo already contains the name.

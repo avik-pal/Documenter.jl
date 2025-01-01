@@ -1,12 +1,12 @@
 """
-Provides a consistent interface to retreiving `DocStr` objects from the Julia
+Provides a consistent interface to retrieving `DocStr` objects from the Julia
 docsystem in both `0.4` and `0.5`.
 """
 module DocSystem
 
-using DocStringExtensions
+using DocStringExtensions: SIGNATURES
 import Markdown
-import Base.Docs: MultiDoc, formatdoc, DocStr
+import Base.Docs: MultiDoc, DocStr
 
 ## Bindings ##
 
@@ -31,10 +31,10 @@ binding(any::Any) = throw(ArgumentError("cannot convert `$(repr(any))` to a `Bin
 # The simple definitions.
 #
 binding(b::Docs.Binding) = binding(b.mod, b.var)
-binding(d::DataType)     = binding(d.name.module, d.name.name)
-binding(m::Module)       = binding(m, nameof(m))
-binding(s::Symbol)       = binding(Main, s)
-binding(f::Function)     = binding(typeof(f).name.module, typeof(f).name.mt.name)
+binding(d::DataType) = binding(parentmodule(d), nameof(d))
+binding(m::Module) = binding(m, nameof(m))
+binding(s::Symbol) = binding(Main, s)
+binding(f::Function) = binding(parentmodule(f), nameof(f))
 
 #
 # We need a lookup table for `IntrinsicFunction`s since they do not track their
@@ -42,7 +42,7 @@ binding(f::Function)     = binding(typeof(f).name.module, typeof(f).name.mt.name
 #
 # Note that `IntrinsicFunction` is exported from `Base` in `0.4`, but not in `0.5`.
 #
-let INTRINSICS = Dict(map(s -> getfield(Core.Intrinsics, s) => s, names(Core.Intrinsics, all=true)))
+let INTRINSICS = Dict(map(s -> getfield(Core.Intrinsics, s) => s, names(Core.Intrinsics, all = true)))
     global binding(i::Core.IntrinsicFunction) = binding(Core.Intrinsics, INTRINSICS[i]::Symbol)
 end
 
@@ -53,7 +53,7 @@ end
 #
 function binding(m::Module, v::Symbol)
     m = nameof(m) === v ? parentmodule(m) : m
-    Docs.Binding(m, v)
+    return Docs.Binding(m, v)
 end
 
 #
@@ -63,7 +63,7 @@ binding(m::Module, x::Expr) =
     Meta.isexpr(x, :.) ? binding(getmod(m, x.args[1]), x.args[2].value) :
     Meta.isexpr(x, [:call, :macrocall, :curly]) ? binding(m, x.args[1]) :
     Meta.isexpr(x, :where) ? binding(m, x.args[1].args[1]) :
-        error("`binding` cannot understand expression `$x`.")
+    error("`binding` cannot understand expression `$x`.")
 
 # Helper methods for the above `binding` method.
 getmod(m::Module, x::Expr) = getfield(getmod(m, x.args[1]), x.args[2].value)
@@ -77,7 +77,7 @@ binding(m::Module, λ::Any) = binding(λ)
 
 function signature(x, str::AbstractString)
     ts = Base.Docs.signature(x)
-    (Meta.isexpr(x, :macrocall, 2) && !endswith(strip(str), "()")) ? :(Union{}) : ts
+    return (Meta.isexpr(x, :macrocall, 2) && !endswith(strip(str), "()")) ? :(Union{}) : ts
 end
 
 ## Docstring containers. ##
@@ -100,9 +100,8 @@ function multidoc(markdown::Markdown.MD)
     sig = Union{}
     push!(md.order, sig)
     md.docs[sig] = docstr(markdown)
-    md
+    return md
 end
-
 
 
 """
@@ -123,14 +122,12 @@ function docstr(md::Markdown.MD; kws...)
     for (key, value) in kws
         doc.data[key] = value
     end
-    doc
+    return doc
 end
 docstr(other) = other
 
 
 ## Formatting `DocStr`s. ##
-
-
 
 
 ## Converting docstring caches. ##
@@ -142,19 +139,19 @@ Converts a `0.4`-style docstring cache into a `0.5` one.
 
 The original docstring cache is not modified.
 """
-function convertmeta(meta::IdDict{Any,Any})
+function convertmeta(meta::IdDict{Any, Any})
     if !haskey(CACHED, meta)
-        docs = IdDict{Any,Any}()
+        docs = IdDict{Any, Any}()
         for (k, v) in meta
-            if !isa(k, Union{Number, AbstractString, IdDict{Any,Any}})
+            if !isa(k, Union{Number, AbstractString, IdDict{Any, Any}})
                 docs[binding(k)] = multidoc(v)
             end
         end
         CACHED[meta] = docs
     end
-    CACHED[meta]::IdDict{Any,Any}
+    return CACHED[meta]::IdDict{Any, Any}
 end
-const CACHED = IdDict{Any,Any}()
+const CACHED = IdDict{Any, Any}()
 
 
 ## Get docs from modules.
@@ -162,23 +159,19 @@ const CACHED = IdDict{Any,Any}()
 """
 $(SIGNATURES)
 
-Find all `DocStr` objects that match the provided arguments:
-
+Find all `DocStr` objects that match the provided arguments exactly.
 - `binding`: the name of the object.
 - `typesig`: the signature of the object. Default: `Union{}`.
-- `compare`: how to compare signatures? Exact (`==`) or subtypes (`<:`). Default: `<:`.
+- `compare`: how to compare signatures? (`==` (default), `<:` or `>:`)
 - `modules`: which modules to search through. Default: *all modules*.
-- `aliases`: check aliases of `binding` when nothing is found. Default: `true`.
 
-Returns a `Vector{DocStr}` ordered by definition order in `0.5` and by
-`type_morespecific` in `0.4`.
+Return a `Vector{DocStr}` ordered by definition order.
 """
-function getdocs(
+function getspecificdocs(
         binding::Docs.Binding,
-        typesig::Type = Union{};
+        typesig::Type = Union{},
         compare = (==),
         modules = Docs.modules,
-        aliases = true,
     )
     # Fall back to searching all modules if user provides no modules.
     modules = isempty(modules) ? Docs.modules : modules
@@ -200,28 +193,44 @@ function getdocs(
             end
         end
     end
-    if compare == (==)
-        # Exact matching of signatures:
-        #
-        # When we get a single match from using `==` as the comparision then we just return
-        # that one result.
-        #
-        # Otherwise we fallback to comparing signatures using `<:` to match, hopefully, a
-        # wider range of possible docstrings.
-        if length(results) == 1
-            results
-        else
-            getdocs(binding, typesig; compare = (<:), modules = modules, aliases = aliases)
-        end
-    else
-        # When nothing is found we check whether the `binding` is an alias of some other
-        # `Binding`. If so then we redo the search using that `Binding` instead.
-        if aliases && isempty(results) && (b = aliasof(binding)) != binding
-            getdocs(b, typesig; compare = compare, modules = modules)
-        else
-            results
+    return results
+end
+
+"""
+$(SIGNATURES)
+
+Find all `DocStr` objects that somehow match the provided arguments.
+That is, if [`getspecificdocs`](@ref) fails, get docs for aliases of
+`binding` (unless `aliases` is set to `false`). For `compare` being `==` also
+try getting docs for `<:`.
+"""
+function getdocs(
+        binding::Docs.Binding,
+        typesig::Type = Union{};
+        compare = (==),
+        modules = Docs.modules,
+        aliases = true,
+    )
+    # First, we try to find the docs that _exactly_ match the binding. If you
+    # have aliases, you can have a separate docstring attached to the alias.
+    results = getspecificdocs(binding, typesig, compare, modules)
+    # If we don't find anything, we'll loosen the function signature comparison
+    # to allow for subtypes, to find any signatures that would get called in
+    # dispatch for this method (i.e. supertype signatures).
+    if isempty(results) && compare == (==)
+        results = getspecificdocs(binding, typesig, (<:), modules)
+    end
+    # If we still can't find anything, `aliases` is set, and this binding is
+    # indeed an alias, we'll fetch the docstrings for the original object, first
+    # as an exact match (if relevant) and then also falling back to a subtype
+    # search.
+    if isempty(results) && aliases && (b = aliasof(binding)) != binding
+        results = getspecificdocs(b, typesig, compare, modules)
+        if isempty(results) && compare == (==)
+            results = getspecificdocs(b, typesig, (<:), modules)
         end
     end
+    return results
 end
 
 """
@@ -234,7 +243,7 @@ Note that when conversion fails this method returns an empty `Vector{DocStr}`.
 """
 function getdocs(object::Any, typesig::Type = Union{}; kws...)
     binding = aliasof(object, object)
-    binding === object ? DocStr[] : getdocs(binding, typesig; kws...)
+    return binding === object ? DocStr[] : getdocs(binding, typesig; kws...)
 end
 
 #
@@ -254,11 +263,11 @@ ismacro(b::Docs.Binding) = startswith(string(b.var), '@')
 
 function category(b::Docs.Binding)
     if iskeyword(b)
-        :keyword
+        return :keyword
     elseif ismacro(b)
-        :macro
+        return :macro
     else
-        category(resolve(b))
+        return category(resolve(b))
     end
 end
 category(::Function) = :function
@@ -268,14 +277,14 @@ category(::Module) = :module
 category(::Any) = :constant
 
 """
-    DocSystem.parsedoc(docstr::DocStr)
+    DocSystem.parsedoc(docstr::DocStr) -> Markdown.MD
 
 Thin internal wrapper around `Base.Docs.parsedoc` which prints additional debug information
 in case `Base.Docs.parsedoc` fails with an exception.
 """
 function parsedoc(docstr::DocStr)
-    try
-        Base.Docs.parsedoc(docstr)
+    md = try
+        Base.Docs.parsedoc(docstr)::Markdown.MD
     catch exception
         @error """
         parsedoc failed to parse a docstring into Markdown. This indicates a problem with the docstring.
@@ -283,6 +292,27 @@ function parsedoc(docstr::DocStr)
         # Note: collect is there because svec does not print as nicely as a vector
         rethrow(exception)
     end
+    # Normally, the docsystem double wraps the docstrings in Markdown.MD, and so we need to unwrap
+    # it. _However_, if the MD object is attached directly with the @doc macro, which can happen,
+    # for example, when using the @doc_str macro, i.e.
+    #
+    #   @doc doc"""
+    #   ...
+    #   """ function foo end
+    #
+    # Then it does _not_ get double wrapped. So what we promise here is that DocSystem.parsedoc
+    # will return the unwrapped Markdown.MD object, which we can e.g. pass to MarkdownAST conversion
+    # directly. But we need to check if it actually is double wrapped or not.
+    #
+    # This heuristic should work for checking the double wrapping:
+    while length(md.content) == 1 && isa(first(md.content), Markdown.MD)
+        inner_md = only(md.content)
+        # The docstring's outer Markdown.MD contains necessary metadata, however, so we need to
+        # retain it.
+        inner_md.meta = md.meta
+        md = inner_md
+    end
+    return md
 end
 
 end

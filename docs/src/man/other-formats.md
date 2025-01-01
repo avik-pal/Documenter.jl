@@ -24,6 +24,9 @@ the version number will be appended to the title.
 The `makedocs` argument `authors` should also be specified, it will be used for the
 `\authors` field in the tex document.
 
+!!! warning "Known issue"
+    If the `makedocs` argument `pages` is not assigned, Documenter will generate tex documents without contents. ([#2132](@ref))
+
 ### Compiling using natively installed latex
 
 The following is required to build the documentation:
@@ -32,6 +35,27 @@ The following is required to build the documentation:
 * You need the [minted](https://ctan.org/pkg/minted) LaTeX package and its backend source
   highlighter [Pygments](https://pygments.org/) installed.
 * You need the [_DejaVu Sans_ and _DejaVu Sans Mono_](https://dejavu-fonts.github.io/) fonts installed.
+
+### Compiling using Tectonic
+
+The documentation can be also built using the
+[Tectonic](https://tectonic-typesetting.github.io) LaTeX engine. It is required to have a `tectonic`
+available in `PATH`, or to provide a path to the binary using the `tectonic` keyword:
+
+```
+using Documenter
+
+# Executable `tectonic` is present in `PATH`
+makedocs(
+    format = Documenter.LaTeX(platform="tectonic"),
+    ...)
+
+# The path to `tectonic` is provided by the tectonic_jll package
+using tectonic_jll: tectonic
+makedocs(
+    format = Documenter.LaTeX(platform="tectonic", tectonic=tectonic()),
+    ...)
+```
 
 ### Compiling using docker image
 
@@ -42,9 +66,9 @@ the builder to call. You also need to tell Documenter to use the docker image, i
 installed tex which is the default. This is done with the `LaTeX` specifier:
 
 ```
-using DocumenterLaTeX
+using Documenter
 makedocs(
-    format = LaTeX(platform = "docker"),
+    format = Documenter.LaTeX(platform = "docker"),
     ...
 )
 ```
@@ -64,150 +88,43 @@ There's a possibility to save only the `.tex` file and skip the PDF compilation.
 For this purpose use the `platform="none"` keyword:
 
 ```
-using DocumenterLaTeX
+using Documenter
 makedocs(
-    format = LaTeX(platform = "none"),
+    format = Documenter.LaTeX(platform = "none"),
     ...
 )
 ```
 
+## [Custom LaTeX style](@id custom-latex)
+
+The PDF/LaTeX backend works by generating a TeX file based on the input Markdown files.
+For users who need or want more control over the generated PDF, it is possible to customize
+the setup part of the generated TeX code.
+
+### Load custom packages
+
+By default, the generated TeX file loads the [`documenter.sty`](https://github.com/JuliaDocs/Documenter.jl/blob/master/assets/latex/documenter.sty)
+style file, which loads several packages (such as `fontspec`, `amsmath`, `listings`, `minted`, `tabulary`, `graphicx`)
+and otherwise configures the TeX build.
+
+Users can load additional packages and declare additional configuration by adding a
+`custom.sty` file to the `assets/` source directory. The custom style file will be loaded
+right after the default style (`documenter.sty`).
+
+### Custom preamble
+
+By default, Documenter uses the [`preamble.tex`](https://github.com/JuliaDocs/Documenter.jl/blob/master/assets/latex/preamble.tex)
+preamble, with only the dynamically generated declarations for the `\DocMainTitle`,
+`\DocVersion`, `\DocAuthors`, and `\JuliaVersion` variables preceding it.
+
+For more control, it is possible to fully replace the preamble by adding a `preamble.tex`
+file into the `assets/` source directory, which will then be used instead of the default
+one. The Documenter tests contain two examples of how a custom preamble can be used:
+
+- [To customize the cover page of the manual.](https://github.com/JuliaDocs/Documenter.jl/tree/master/test/examples/src.cover_page)
+- [To customize the TOC style.](https://github.com/JuliaDocs/Documenter.jl/tree/master/test/examples/src.toc_style)
+
 ## Markdown & MkDocs
 
-Markdown output requires the [`DocumenterMarkdown`](https://github.com/JuliaDocs/DocumenterMarkdown.jl)
-package to be available and loaded.
-For Travis setups, add the package to the `docs/Project.toml` environment as a dependency.
-You also need to import the package in `make.jl`:
-
-```
-using DocumenterMarkdown
-```
-
-When `DocumenterMarkdown` is loaded, you can specify `format = Markdown()` in [`makedocs`](@ref).
-Documenter will then output a set of Markdown files to the `build` directory that can then
-further be processed with [MkDocs](https://www.mkdocs.org/) into HTML pages.
-
-MkDocs, of course, is not the only option you have -- any markdown to HTML converter should
-work fine with some amount of setting up.
-
-!!! note
-
-    Markdown output used to be the default option (i.e. when leaving the `format` option
-    unspecified). The default now is the HTML output.
-
-### The MkDocs `mkdocs.yml` file
-
-A MkDocs build is controlled by the `mkdocs.yml` configuration file. Add the file with the
-following content to the `docs/` directory:
-
-```yaml
-site_name:        PACKAGE_NAME.jl
-repo_url:         https://github.com/USER_NAME/PACKAGE_NAME.jl
-site_description: Description...
-site_author:      USER_NAME
-
-theme: readthedocs
-
-extra_css:
-  - assets/Documenter.css
-
-extra_javascript:
-  - https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS_HTML
-  - assets/mathjaxhelper.js
-
-markdown_extensions:
-  - extra
-  - tables
-  - fenced_code
-  - mdx_math
-
-docs_dir: 'build'
-
-pages:
-  - Home: index.md
-```
-
-If you have run Documenter and it has generated a `build/` directory, you can now try running
-`mkdocs build` -- this should now generate the `site/` directory.
-You should also add the `docs/site/` directory into your `.gitignore` file, which should now
-look like:
-
-```
-docs/build/
-docs/site/
-```
-
-This is only a basic skeleton. Read through the MkDocs documentation if you would like to
-know more about the available settings.
-
-
-### Deployment with MkDocs
-
-To deploy MkDocs on Travis, you also need to provide additional keyword arguments to
-[`deploydocs`](@ref). Your [`deploydocs`](@ref) call should look something like
-
-```julia
-deploydocs(
-    repo   = "github.com/USER_NAME/PACKAGE_NAME.jl.git",
-    deps   = Deps.pip("mkdocs", "pygments", "python-markdown-math"),
-    make   = () -> run(`mkdocs build`)
-    target = "site"
-)
-```
-
-* `deps` serves to provide the required Python dependencies to build the documentation
-* `make` specifies the function that calls `mkdocs` to perform the second build step
-* `target`, which specified which files get copied to `gh-pages`, needs to point to the
-  `site/` directory
-
-In the example above we include the dependencies [mkdocs](https://www.mkdocs.org)
-and [`python-markdown-math`](https://github.com/mitya57/python-markdown-math).
-The former makes sure that MkDocs is installed to deploy the documentation,
-and the latter provides the `mdx_math` markdown extension to exploit MathJax
-rendering of latex equations in markdown. Other dependencies should be
-included here.
-
-
-### ``\LaTeX``: MkDocs and MathJax
-
-To get MkDocs to display ``\LaTeX`` equations correctly we need to update several of this
-configuration files described in the [Package Guide](@ref).
-
-`docs/make.jl` should add the `python-markdown-math` dependency to allow for equations to
-be rendered correctly.
-
-```julia
-# ...
-
-deploydocs(
-    deps = Deps.pip("pygments", "mkdocs", "python-markdown-math"),
-    # ...
-)
-```
-
-This package should also be installed locally so that you can preview the generated
-documentation prior to pushing new commits to a repository.
-
-```sh
-$ pip install python-markdown-math
-```
-
-The `docs/mkdocs.yml` file must add the `python-markdown-math` extension, called `mdx_math`,
-as well as two MathJax JavaScript files:
-
-```yaml
-# ...
-markdown_extensions:
-  - mdx_math
-  # ...
-
-extra_javascript:
-  - https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS_HTML
-  - assets/mathjaxhelper.js
-# ...
-```
-
-**Final Remarks**
-
-Following this guide and adding the necessary changes to the configuration files should
-enable properly rendered mathematical equations within your documentation both locally and
-when built and deployed using the Travis built service.
+Documenter no longer provides the Markdown/MkDocs output, and this functionality has moved
+to the [`DocumenterMarkdown`](https://github.com/JuliaDocs/DocumenterMarkdown.jl) package.

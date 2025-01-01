@@ -1,6 +1,7 @@
 
 ```@meta
 CurrentModule = Main.Mod
+CollapsedDocStrings = true
 ```
 
 # Function Index
@@ -14,6 +15,16 @@ Pages = ["lib/functions.md"]
 [`ccall`](@ref), [`func(x)`](@ref), [`T`](@ref), [`for`](@ref), and [`while`](@ref).
 
 ```@docs
+func(x)
+T
+ccall
+for
+while
+@time
+@assert
+```
+
+```@docs; canonical=false
 func(x)
 T
 ccall

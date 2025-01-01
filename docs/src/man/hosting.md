@@ -15,7 +15,7 @@ the docs you're currently reading.
     documentation locally with Documenter.
 
     This guide assumes that you already have [GitHub](https://github.com/) and
-    [Travis](https://travis-ci.com/) accounts setup. If not then go set those up first and
+    [Travis](https://www.travis-ci.com/) accounts setup. If not then go set those up first and
     then return here.
 
     It is possible to deploy from other systems than Travis CI or GitHub Actions,
@@ -33,8 +33,9 @@ package repository:
 - If the documentation is built successfully, the bot will attempt to push the generated
   HTML pages back to GitHub.
 
-Note that the hosted documentation does not update when you make pull requests; you see
-updates only when you merge to `master` or push new tags.
+Note that the hosted documentation does not update when you (or other contributors)
+make pull requests; you see updates only when you merge to the trunk branch (typically,
+`master` or `main`) or push new tags.
 
 In the upcoming sections we describe how to configure the build service to run
 the documentation build stage. In general it is easiest to choose the same
@@ -51,7 +52,7 @@ file. Note that the snippet below will not work by itself and must be accompanie
 jobs:
   include:
     - stage: "Documentation"
-      julia: 1.6
+      julia: 1
       os: linux
       script:
         - julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd()));
@@ -62,7 +63,7 @@ jobs:
 
 where the `julia:` and `os:` entries decide the worker from which the docs are built and
 deployed. In the example above we will thus build and deploy the documentation from a linux
-worker running Julia 1.6. For more information on how to setup a build stage, see the Travis
+worker running Julia 1 (the latest stable version). For more information on how to setup a build stage, see the Travis
 manual for [Build Stages](https://docs.travis-ci.com/user/build-stages).
 
 The three lines in the `script:` section do the following:
@@ -183,18 +184,24 @@ name: Documentation
 on:
   push:
     branches:
-      - master
+      - master # update to match your development branch (master, main, dev, trunk, ...)
     tags: '*'
   pull_request:
 
 jobs:
   build:
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: read
+      statuses: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@latest
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
         with:
-          version: '1.6'
+          version: '1'
+      - uses: julia-actions/cache@v2
       - name: Install dependencies
         run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
       - name: Build and deploy
@@ -207,7 +214,7 @@ jobs:
 This will install Julia, checkout the correct commit of your repository, and run the
 build of the documentation. The `julia-version:`, `julia-arch:` and `os:` entries decide
 the environment from which the docs are built and deployed. The example above builds and deploys
-the documentation from an Ubuntu worker running Julia 1.6. 
+the documentation from an Ubuntu worker running Julia 1.
 
 !!! tip
     The example above is a basic workflow that should suit most projects. For more information on
@@ -249,7 +256,7 @@ see the previous section.
 
 When running from GitHub Actions it is possible to authenticate using
 [the GitHub Actions authentication token
-(`GITHUB_TOKEN`)](https://docs.github.com/en/actions/reference/authentication-in-a-workflow). This is done by adding
+(`GITHUB_TOKEN`)](https://docs.github.com/en/actions/security-guides/automatic-token-authentication). This is done by adding
 
 ```yaml
 GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -276,8 +283,19 @@ DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
 
 to the configuration file, as showed in the [previous section](@ref GitHub-Actions).
 See GitHub's manual for
-[Encrypted secrets](https://docs.github.com/en/actions/reference/encrypted-secrets)
+[Encrypted secrets](https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions)
 for more information.
+
+### Permissions
+
+The following [GitHub Actions job or workflow permissions](https://docs.github.com/en/actions/using-jobs/assigning-permissions-to-jobs) are required to successfully use [`deploydocs`](#the-deploydocs-function):
+
+```yaml
+permissions:
+  contents: write  # Required when authenticating with `GITHUB_TOKEN`, not needed when authenticating with SSH deploy keys
+  pull-requests: read  # Required when using `push_preview=true`
+  statuses: write  # Optional, used to report documentation build statuses
+```
 
 ### Add code coverage from documentation builds
 
@@ -292,7 +310,7 @@ are uploaded to Codecov:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
       - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v1
+      - uses: codecov/codecov-action@v4
 ```
 
 ## `docs/Project.toml`
@@ -303,9 +321,7 @@ dependencies your package might have. If Documenter is the only dependency, then
 
 ````@eval
 import Documenter, Markdown
-m = match(r"^version = \"(\d+.\d+.\d+)(-DEV)?(\+.+)?\"$"m,
-    read(joinpath(dirname(dirname(pathof(Documenter))), "Project.toml"), String))
-v = VersionNumber(m.captures[1])
+v = Documenter.DOCUMENTER_VERSION
 Markdown.parse("""
 ```toml
 [deps]
@@ -370,16 +386,16 @@ exist it will be created automatically by [`deploydocs`](@ref). If it does exist
 Documenter simply adds an additional commit with the built documentation. You should be
 aware that Documenter may overwrite existing content without warning.
 
-If you wish to create the `gh-pages` branch manually that can be done following
-[these instructions](https://coderwall.com/p/0n3soa/create-a-disconnected-git-branch).
+If you wish to create the `gh-pages` branch manually, that can be done [creating an "orphan" branch, with the `git checkout --orphan` option](https://git-scm.com/docs/git-checkout#Documentation/git-checkout.txt---orphanltnew-branchgt).
 
-You also need to make sure that you have "gh-pages branch" selected as
+You also need to make sure that you have `gh-pages branch` and `/ (root)` selected as
 [the source of the GitHub Pages site in your GitHub repository
 settings](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site),
 so that GitHub would actually serve the contents as a website.
 
-**Cleaning up `gh-pages`.**
-Note that the `gh-pages` branch can become very large, especially when `push_preview` is
+### Cleaning up `gh-pages`
+
+The `gh-pages` branch can become very large, especially when `push_preview` is
 enabled to build documentation for each pull request. To clean up the branch and remove
 stale documentation previews, a GitHub Actions workflow like the following can be used.
 
@@ -390,29 +406,90 @@ on:
   pull_request:
     types: [closed]
 
+# Ensure that only one "Doc Preview Cleanup" workflow is force pushing at a time
+concurrency:
+  group: doc-preview-cleanup
+  cancel-in-progress: false
+
 jobs:
   doc-preview-cleanup:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout gh-pages branch
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           ref: gh-pages
       - name: Delete preview and history + push changes
         run: |
-            if [ -d "previews/PR$PRNUM" ]; then
+          if [ -d "${preview_dir}" ]; then
               git config user.name "Documenter.jl"
               git config user.email "documenter@juliadocs.github.io"
-              git rm -rf "previews/PR$PRNUM"
+              git rm -rf "${preview_dir}"
               git commit -m "delete preview"
               git branch gh-pages-new $(echo "delete history" | git commit-tree HEAD^{tree})
               git push --force origin gh-pages-new:gh-pages
-            fi
+          fi
         env:
-            PRNUM: ${{ github.event.number }}
+          preview_dir: previews/PR${{ github.event.number }}
 ```
 
-_This workflow was taken from [CliMA/TimeMachine.jl](https://github.com/CliMA/TimeMachine.jl/blob/4d951f814b5b25cd2d13fd7a9f9878e75d0089d1/.github/workflows/DocCleanup.yml) (Apache License 2.0)._
+_This workflow was based on [CliMA/ClimaTimeSteppers.jl](https://github.com/CliMA/ClimaTimeSteppers.jl/blob/0660ace688b4f4b8a86d3c459ab62ccf01d7ef31/.github/workflows/DocCleanup.yml) (Apache License 2.0)._
+
+The `permissions:` line above is described in the
+[GitHub Docs](https://docs.github.com/en/actions/using-jobs/assigning-permissions-to-jobs#assigning-permissions-to-a-specific-job);
+an alternative is to give GitHub workflows write permissions under the repo settings, e.g.,
+`https://github.com/<USER>/<REPO>.jl/settings/actions`.
+
+## Woodpecker CI
+
+To run a documentation build from Woodpecker CI, one should create an access token
+from their forge of choice: GitHub, GitLab, or Codeberg (or any Gitea instance).
+This access token should be added to Woodpecker CI as a secret named as
+`project_access_token`. The case does not matter since this will be passed as
+uppercase environment variables to your pipeline. Next, create a new pipeline
+configuration file called `.woodpecker.yml` with the following contents:
+
+- Woodpecker 0.15.x and pre-1.0.0
+
+  ```yaml
+  pipeline:
+      docs:
+      when:
+          branch: main  # update to match your development branch
+      image: julia
+      commands:
+          - julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
+          - julia --project=docs/ docs/make.jl
+      secrets: [ project_access_token ]  # access token is a secret
+
+  ```
+
+- Woodpecker 1.0.x and onwards
+
+  ```yaml
+  steps:
+      docs:
+      when:
+          branch: main  # update to match your development branch
+      image: julia
+      commands:
+          - julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
+          - julia --project=docs/ docs/make.jl
+      secrets: [ project_access_token ]  # access token is a secret
+
+  ```
+
+This will pull an image of julia from docker and run the following commands from
+`commands:` which instantiates the project for development and then runs the `make.jl`
+file and builds and deploys the documentation to a branch which defaults to `pages`
+which you can modify to something else e.g. GitHub → gh-pages, Codeberg → pages.
+
+!!! tip
+	The example above is a basic pipeline that suits most projects. Further information
+	on how to customize your pipelines can be found in the official woodpecker
+	documentation: [Woodpecker CI](https://woodpecker-ci.org/docs/intro).
 
 ## Documentation Versions
 
@@ -423,13 +500,15 @@ _This workflow was taken from [CliMA/TimeMachine.jl](https://github.com/CliMA/Ti
 
 By default the documentation is deployed as follows:
 
-- Documentation built for a tag `vX.Y.Z` will be stored in a folder `vX.Y.Z`.
+- Documentation built for a tag `<tag_prefix>vX.Y.Z` will be stored in a folder `vX.Y.Z`,
+  determined by the `tag_prefix` keyword to [`deploydocs`](@ref)
+  (`""` by default).
 
 - Documentation built from the `devbranch` branch (`master` by default) is stored in a folder
   determined by the `devurl` keyword to [`deploydocs`](@ref) (`dev` by default).
 
-Which versions that will show up in the version selector is determined by the
-`versions` argument to [`deploydocs`](@ref).
+Which versions will show up in the version selector is determined by the
+`versions` argument to [`deploydocs`](@ref). For examples of non-default `tag_prefix` usage, see [Deploying from a monorepo](@ref).
 
 Unless a custom domain is being used, the pages are found at:
 
@@ -437,6 +516,9 @@ Unless a custom domain is being used, the pages are found at:
 https://USER_NAME.github.io/PACKAGE_NAME.jl/vX.Y.Z
 https://USER_NAME.github.io/PACKAGE_NAME.jl/dev
 ```
+
+!!! tip
+    If you need Documenter to maintain [a `CNAME` file](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site) for you can use the `cname` argument of [`deploydocs`](@ref) to specify the domain.
 
 By default Documenter will create a link called `stable` that points to the latest release
 
@@ -446,23 +528,6 @@ https://USER_NAME.github.io/PACKAGE_NAME.jl/stable
 
 It is recommended to use this link, rather than the versioned links, since it will be updated
 with new releases.
-
-!!! info "Fixing broken release deployments"
-
-    It can happen that, for one reason or another, the documentation for a tagged version of
-    your package fails to deploy and a fix would require changes to the source code (e.g. a
-    misconfigured `make.jl`). However, as registered tags should not be changed, you can not
-    simply update the original tag (e.g. `v1.2.3`) with the fix.
-
-    In this situation, you can manually create and push a tag for the commit with the fix
-    that has the same version number, but also some build metadata (e.g. `v1.2.3+doc1`). For
-    Git, this is a completely different tag, so it won't interfere with anything. But when
-    Documenter runs on this tag, it will ignore the build metadata and deploy the docs as if
-    they were for version `v1.2.3`.
-
-    Note that, as with normal tag builds, you need to make sure that your CI that runs
-    Documenter is configured to run on such tags (e.g. that the regex constraining the
-    branches the CI runs on is broad enough etc).
 
 Once your documentation has been pushed to the `gh-pages` branch you should add links to
 your `README.md` pointing to the `stable` (and perhaps `dev`) documentation URLs. It is common
@@ -481,6 +546,23 @@ and text of the image can be changed by altering `docs-stable-blue` as described
 standard to make it easier for potential users to find documentation links across multiple
 package README files.
 
+### Fixing broken release deployments
+
+It can happen that, for one reason or another, the documentation for a tagged version of
+your package fails to deploy and a fix would require changes to the source code (e.g. a
+misconfigured `make.jl`). However, as registered tags should not be changed, you can not
+simply update the original tag (e.g. `v1.2.3`) with the fix.
+
+In this situation, you can manually create and push a tag for the commit with the fix
+that has the same version number, but also some build metadata (e.g. `v1.2.3+doc1`). For
+Git, this is a completely different tag, so it won't interfere with anything. But when
+Documenter runs on this tag, it will ignore the build metadata and deploy the docs as if
+they were for version `v1.2.3`.
+
+Note that, as with normal tag builds, you need to make sure that your CI that runs
+Documenter is configured to run on such tags (e.g. that the regex constraining the
+branches the CI runs on is broad enough etc).
+
 ### Deploying without the versioning scheme
 
 Documenter supports deployment directly to the website root ignoring any version
@@ -496,20 +578,113 @@ https://USER_NAME.github.io/PACKAGE_NAME.jl/
 Preview builds are still deployed to the `previews` subfolder.
 
 !!! note
-    The landing page for the [JuliaDocs GitHub organization](https://juliadocs.github.io)
+    The landing page for the [JuliaDocs GitHub organization](https://juliadocs.org/)
     ([source repository](https://github.com/JuliaDocs/juliadocs.github.io)) is one example
     where this functionality is used.
 
----
+### Out-of-repo deployment
 
-**Final Remarks**
+Sometimes the `gh-pages` branch can become really large, either just due to a large number of commits over time, or due figures and other large artifacts.
+In those cases, it can be useful to deploy the docs in the `gh-pages` of a separate repository.
+The following steps can be used to deploy the documentation of a "source"
+repository on a "target" repo:
 
-That should be all that is needed to enable automatic documentation building. Pushing new
-commits to your `master` branch should trigger doc builds. **Note that other branches do not
-trigger these builds and neither do pull requests by potential contributors.**
+1. Run `DocumenterTools.genkeys()` to generate a pair of keys
+2. Add the **deploy key** to the **"target"** repository
+3. Add the `DOCUMENTER_KEY` **secret** to the **"source"** repository (that runs the documentation workflow)
+4. Adapt `docs/make.jl` to deploy on "target" repository:
 
-If you would like to see a more complete example of how this process is setup then take a
-look at this package's repository for some inspiration.
+```julia
+# url of target repo
+repo = "github.com/TargetRepoOrg/TargetRepo.git"
+
+# You have to override the corresponding environment variable that
+# deplodocs uses to determine if it is deploying to the correct repository.
+# For GitHub, it's the GITHUB_REPOSITORY variable:
+withenv("GITHUB_REPOSITORY" => repo) do
+  deploydocs(repo=repo)
+end
+```
+
+## Deploying from a monorepo
+
+Documenter.jl supports building documentation for a package that lives in a monorepo, e.g., in a repository that contains multiple packages (including one potentially top level)
+
+Here's one example of setting up documentation for a repository that has the following structure: one top level package and two subpackages PackageA.jl and PackageB.jl:
+```
+.
+├── README.md
+├── docs
+|   ├── make.jl
+│   └── Project.toml
+├── src/...
+├── PackageA.jl
+│   ├── docs
+|   │   ├── make.jl
+|   │   └── Project.toml
+│   └── src/...
+└── PackageB.jl
+    ├── docs
+    │   ├── make.jl
+    │   └── Project.toml
+    └── src/...
+```
+
+The three respective `make.jl` scripts should contain [`deploydocs`](@ref) settings that look something like
+
+```julia
+# In ./docs/make.jl
+deploydocs(; repo = "github.com/USER_NAME/PACKAGE_NAME.jl.git",
+            # ...any additional kwargs
+            )
+
+# In ./PackageA.jl/docs/make.jl
+deploydocs(; repo = "github.com/USER_NAME/PACKAGE_NAME.jl.git",
+             dirname="PackageA",
+             tag_prefix="PackageA-",
+             # ...any additional kwargs
+             )
+
+# In ./PackageB.jl/docs/make.jl
+deploydocs(; repo = "github.com/USER_NAME/PACKAGE_NAME.jl.git",
+             dirname="PackageB",
+             tag_prefix="PackageB-",
+             # ...any additional kwargs
+             )
+```
+
+To build separate docs for each package, create three **separate** buildbot configurations, one for each package. Depending on the service used, the section that calls each `make.jl` script will need to be configured appropriately, e.g.,
+```
+# In the configuration file that builds docs for the top level package
+run: julia --project=docs/ docs/make.jl
+
+# In the configuration file that builds docs for PackageA.jl
+run: julia --project=PackageA.jl/docs/ PackageA.jl/docs/make.jl
+
+# In the configuration file that builds docs for PackageB.jl
+run: julia --project=PackageB.jl/docs/ PackageB.jl/docs/make.jl
+```
+
+Releases of each subpackage should be tagged with that same prefix, namely `v0.3.2` (for the top-level package), `PackageA-v0.1.2`, and `PackageB-v3.2+extra_build_tags`. which will then trigger versioned documentation deployments. Similarly to [Documentation Versions](@ref), unless a custom domain is used these three separate sets of pages will be found at:
+
+```
+https://USER_NAME.github.io/PACKAGE_NAME.jl/vX.Y.Z
+https://USER_NAME.github.io/PACKAGE_NAME.jl/dev
+https://USER_NAME.github.io/PACKAGE_NAME.jl/stable  # Links to most recent top level version
+
+https://USER_NAME.github.io/PACKAGE_NAME.jl/PackageA/vX.Y.Z
+https://USER_NAME.github.io/PACKAGE_NAME.jl/PackageA/dev
+https://USER_NAME.github.io/PACKAGE_NAME.jl/PackageA/stable  # Links to most recent PackageA version
+
+https://USER_NAME.github.io/PACKAGE_NAME.jl/PackageB/vX.Y.Z
+https://USER_NAME.github.io/PACKAGE_NAME.jl/PackageB/dev
+https://USER_NAME.github.io/PACKAGE_NAME.jl/PackageB/stable  # Links to most recent PackageB version
+```
+
+While they won't automatically reference one another, such referencing can be added manually (e.g. by linking to `https://USER_NAME.github.io/PACKAGE_NAME.jl/PackageA/stable` from the docs built for PackageB).
+
+!!! warning
+    When building multiple subpackages in the same repo, unique `dirname`s must be specified in each package's `deploydocs`; otherwise, only the most recently built package for a given version over the entire monorepo will be present at `https://USER_NAME.github.io/PACKAGE_NAME.jl/PackageB/vX.Y.Z`, and the rest of the subpackages' documentation will be unavailable.
 
 ## Deployment systems
 
@@ -533,4 +708,5 @@ Documenter.Travis
 Documenter.GitHubActions
 Documenter.GitLab
 Documenter.Buildkite
+Documenter.Woodpecker
 ```
